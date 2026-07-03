@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <code>git clone https://gitee.com/keyDemo/workflow-agent-hub.git</code>
+  <code>git clone git@github.com:iizhan/workflow-agent-hub.git</code>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/keyDemo/workflow-agent-hub">Gitee 仓库</a>
+  <a href="https://github.com/iizhan/workflow-agent-hub">GitHub 私有仓库</a>
 </p>
 
 ---
@@ -165,7 +165,7 @@
 ### npm 安装（推荐）
 
 ```bash
-git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+git clone git@github.com:iizhan/workflow-agent-hub.git
 cd workflow-agent-hub
 pnpm install
 pnpm dev
@@ -178,13 +178,13 @@ pnpm dev
 自动安装 Node.js（如未安装）并拉起 Workflow Agent Hub，支持 Debian/Ubuntu/macOS：
 
 ```bash
-bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/iizhan/workflow-agent-hub/main/scripts/setup.sh)
 ```
 
 ### WSL
 
 ```bash
-bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/iizhan/workflow-agent-hub/main/scripts/setup.sh)
 pnpm dev
 ```
 
@@ -238,7 +238,7 @@ docker compose logs -f hermes-webui
 ### 本地调试启动
 
 ```bash
-git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+git clone git@github.com:iizhan/workflow-agent-hub.git
 cd workflow-agent-hub
 npm install
 npm run dev
@@ -358,7 +358,7 @@ BFF 层负责：API 代理（含路径重写）、SSE 流式推送、文件上�
 
 ## Star 历史
 
-仓库地址：https://gitee.com/keyDemo/workflow-agent-hub
+仓库地址：https://github.com/iizhan/workflow-agent-hub
 
 ## 赞助
 

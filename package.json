@@ -4,9 +4,9 @@
   "description": "Workflow Agent Hub — self-hosted multi-agent orchestration workspace for chat, workflows, applications, skills, and runtime operations",
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/keyDemo/workflow-agent-hub.git"
+    "url": "https://github.com/iizhan/workflow-agent-hub.git"
   },
-  "homepage": "https://gitee.com/keyDemo/workflow-agent-hub",
+  "homepage": "https://github.com/iizhan/workflow-agent-hub",
   "license": "MIT",
   "engines": {
     "node": ">=23.0.0"

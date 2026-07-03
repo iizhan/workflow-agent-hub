@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <code>git clone https://gitee.com/keyDemo/workflow-agent-hub.git</code>
+  <code>git clone git@github.com:iizhan/workflow-agent-hub.git</code>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/keyDemo/workflow-agent-hub">Repository on Gitee</a>
+  <a href="https://github.com/iizhan/workflow-agent-hub">Private GitHub Repository</a>
 </p>
 
 ---
@@ -157,7 +157,7 @@ Unified configuration for **8 platforms** in one page:
 ### npm (Recommended)
 
 ```bash
-git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+git clone git@github.com:iizhan/workflow-agent-hub.git
 cd workflow-agent-hub
 pnpm install
 pnpm dev
@@ -170,13 +170,13 @@ Open **http://localhost:8648**
 Automatically installs Node.js (if missing) and bootstraps Workflow Agent Hub on Debian/Ubuntu/macOS:
 
 ```bash
-bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/iizhan/workflow-agent-hub/main/scripts/setup.sh)
 ```
 
 ### WSL
 
 ```bash
-bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/iizhan/workflow-agent-hub/main/scripts/setup.sh)
 pnpm dev
 ```
 
@@ -230,7 +230,7 @@ On startup the BFF server automatically:
 ### Local Development & Debugging
 
 ```bash
-git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+git clone git@github.com:iizhan/workflow-agent-hub.git
 cd workflow-agent-hub
 npm install
 npm run dev
@@ -350,7 +350,7 @@ The BFF layer handles API proxy (with path rewriting), SSE streaming, file uploa
 
 ## Star History
 
-Repository: https://gitee.com/keyDemo/workflow-agent-hub
+Repository: https://github.com/iizhan/workflow-agent-hub
 
 ## Sponsor
 
