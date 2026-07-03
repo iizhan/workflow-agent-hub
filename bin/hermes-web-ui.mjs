@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, execSync } from 'child_process'
-import { resolve, dirname, join } from 'path'
+import { resolve, dirname, join, isAbsolute } from 'path'
 import { fileURLToPath } from 'url'
 import { readFileSync, writeFileSync, unlinkSync, mkdirSync, openSync, chmodSync, statSync } from 'fs'
 import { randomBytes } from 'crypto'
@@ -11,7 +11,13 @@ const serverEntry = resolve(__dirname, '..', 'dist', 'server', 'index.js')
 const pkgDir = resolve(__dirname, '..')
 const pkg = JSON.parse(readFileSync(resolve(pkgDir, 'package.json'), 'utf-8'))
 const VERSION = pkg.version
-const PID_DIR = resolve(homedir(), '.hermes-web-ui')
+function getAppHome() {
+  const configured = String(process.env.HERMES_WEBUI_HOME || process.env.WEBUI_HOME || '').trim()
+  if (!configured) return resolve(homedir(), '.hermes-web-ui')
+  return isAbsolute(configured) ? configured : resolve(configured)
+}
+
+const PID_DIR = getAppHome()
 const PID_FILE = join(PID_DIR, 'server.pid')
 const LOG_FILE = join(PID_DIR, 'server.log')
 const TOKEN_FILE = join(PID_DIR, '.token')

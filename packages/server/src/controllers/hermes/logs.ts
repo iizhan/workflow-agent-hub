@@ -1,10 +1,9 @@
 import { existsSync, statSync } from 'fs'
 import { readFile } from 'fs/promises'
-import { join } from 'path'
-import { homedir } from 'os'
 import * as hermesCli from '../../services/hermes/hermes-cli'
+import { getWebUiPath } from '../../utils/webui-home'
 
-const WEBUI_LOG_FILE = join(homedir(), '.hermes-web-ui', 'logs', 'server.log')
+const WEBUI_LOG_FILE = getWebUiPath('logs', 'server.log')
 
 interface LogEntry {
   timestamp: string; level: string; logger: string; message: string; raw: string

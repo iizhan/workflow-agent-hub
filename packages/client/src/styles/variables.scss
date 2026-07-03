@@ -54,6 +54,31 @@
   --error-rgb: 198, 40, 40;
   --warning-rgb: 245, 127, 23;
   --accent-info-rgb: 74, 144, 217;
+
+  // Workbench surfaces
+  --workbench-hero-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-primary-rgb), 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.05), transparent 68%);
+  --workbench-page-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-primary-rgb), 0.05), transparent 26%),
+    linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.025), transparent 24%);
+  --workbench-card-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), var(--bg-card));
+  --workbench-card-soft-bg: rgba(var(--accent-primary-rgb), 0.07);
+  --workbench-card-border-strong: rgba(var(--accent-primary-rgb), 0.12);
+  --workbench-hero-panel-bg: rgba(255, 255, 255, 0.56);
+  --workbench-shadow-soft: 0 12px 30px rgba(20, 20, 20, 0.04);
+  --workbench-shadow-hover: 0 14px 30px rgba(15, 15, 15, 0.08);
+  --status-ready-bg: rgba(47, 125, 74, 0.12);
+  --status-ready-text: #2f7d4a;
+  --status-running-bg: rgba(var(--accent-primary-rgb), 0.12);
+  --status-running-text: var(--accent-primary);
+  --status-waiting-bg: rgba(183, 121, 31, 0.12);
+  --status-waiting-bg-strong: rgba(183, 121, 31, 0.16);
+  --status-waiting-text: #b7791f;
+  --status-waiting-text-strong: #9a6b18;
+  --status-failed-bg: rgba(178, 75, 66, 0.12);
+  --status-failed-text: #b24b42;
 }
 
 .dark {
@@ -106,6 +131,30 @@
   --error-rgb: 239, 83, 80;
   --warning-rgb: 255, 183, 77;
   --accent-info-rgb: 107, 163, 214;
+
+  --workbench-hero-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-primary-rgb), 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.08), transparent 68%);
+  --workbench-page-bg:
+    radial-gradient(circle at top left, rgba(var(--accent-primary-rgb), 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.04), transparent 24%);
+  --workbench-card-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), var(--bg-card));
+  --workbench-card-soft-bg: rgba(var(--accent-primary-rgb), 0.12);
+  --workbench-card-border-strong: rgba(var(--accent-primary-rgb), 0.18);
+  --workbench-hero-panel-bg: rgba(20, 20, 20, 0.36);
+  --workbench-shadow-soft: 0 12px 30px rgba(0, 0, 0, 0.18);
+  --workbench-shadow-hover: 0 14px 30px rgba(0, 0, 0, 0.24);
+  --status-ready-bg: rgba(102, 187, 106, 0.18);
+  --status-ready-text: #8ad48e;
+  --status-running-bg: rgba(var(--accent-primary-rgb), 0.18);
+  --status-running-text: var(--accent-primary);
+  --status-waiting-bg: rgba(255, 183, 77, 0.16);
+  --status-waiting-bg-strong: rgba(255, 183, 77, 0.22);
+  --status-waiting-text: #ffc876;
+  --status-waiting-text-strong: #ffd38d;
+  --status-failed-bg: rgba(239, 83, 80, 0.18);
+  --status-failed-text: #ff938f;
 }
 
 // ─── SCSS Variables (delegate to CSS custom properties) ────────
@@ -137,6 +186,8 @@ $success: var(--success);
 $error: var(--error);
 $warning: var(--warning);
 $info: $accent-primary;
+$text-on-accent: var(--text-on-accent);
+$text-on-overlay: var(--text-on-overlay);
 
 // Message bubbles
 $msg-user-bg: var(--msg-user-bg);

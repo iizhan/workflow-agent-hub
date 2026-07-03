@@ -1,23 +1,27 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NSelect } from 'naive-ui'
+import type { SupportedLocale } from '@/i18n/config'
+import { persistLocale } from '@/i18n/config'
 
-const { locale } = useI18n()
+const props = withDefaults(defineProps<{
+  size?: 'tiny' | 'small' | 'medium' | 'large'
+}>(), {
+  size: 'small',
+})
 
-const options = [
-  { label: '中文', value: 'zh' },
-  { label: 'English', value: 'en' },
-  { label: '日本語', value: 'ja' },
-  { label: '한국어', value: 'ko' },
-  { label: 'Français', value: 'fr' },
-  { label: 'Español', value: 'es' },
-  { label: 'Deutsch', value: 'de' },
-  { label: 'Português', value: 'pt' },
-]
+const { locale, t } = useI18n()
 
-function handleChange(val: string) {
+const options = computed(() => [
+  { label: t('language.zh'), value: 'zh' },
+  { label: t('language.en'), value: 'en' },
+])
+
+function handleChange(val: SupportedLocale) {
   locale.value = val
-  localStorage.setItem('hermes_locale', val)
+  persistLocale(val)
+  document.documentElement.lang = val
 }
 </script>
 
@@ -25,9 +29,15 @@ function handleChange(val: string) {
   <NSelect
     :value="locale"
     :options="options"
-    size="tiny"
+    :size="props.size"
     :consistent-menu-width="false"
-    class="input-sm"
+    class="language-switch"
     @update:value="handleChange"
   />
 </template>
+
+<style scoped lang="scss">
+.language-switch {
+  min-width: 104px;
+}
+</style>

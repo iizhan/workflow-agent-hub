@@ -80,6 +80,22 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    if (text) {
+      let apiError = ''
+      try {
+        const parsed = JSON.parse(text) as { error?: string; message?: string }
+        apiError = typeof parsed.error === 'string'
+          ? parsed.error
+          : typeof parsed.message === 'string'
+            ? parsed.message
+            : ''
+      } catch {
+        // Fall through to generic HTTP error below.
+      }
+      if (apiError) {
+        throw new Error(apiError)
+      }
+    }
     throw new Error(`API Error ${res.status}: ${text || res.statusText}`)
   }
 

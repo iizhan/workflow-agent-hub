@@ -1,20 +1,20 @@
 {
-  "name": "hermes-web-ui",
+  "name": "workflow-agent-hub",
   "version": "0.5.15",
-  "description": "Self-hosted AI chat dashboard for Hermes Agent — multi-model (Claude, GPT, Gemini, DeepSeek) web UI with Telegram, Discord, Slack, WhatsApp integration",
+  "description": "Workflow Agent Hub — self-hosted multi-agent orchestration workspace for chat, workflows, applications, skills, and runtime operations",
   "repository": {
     "type": "git",
-    "url": "https://github.com/EKKOLearnAI/hermes-web-ui.git"
+    "url": "https://gitee.com/keyDemo/workflow-agent-hub.git"
   },
-  "homepage": "https://ekkolearnai.com",
+  "homepage": "https://gitee.com/keyDemo/workflow-agent-hub",
   "license": "MIT",
   "engines": {
     "node": ">=23.0.0"
   },
   "keywords": [
-    "hermes",
-    "hermes-agent",
-    "hermes-web",
+    "workflow-agent-hub",
+    "workflow-orchestration",
+    "multi-agent",
     "agent",
     "ai",
     "ai-agent",
@@ -47,8 +47,10 @@
   "scripts": {
     "start": "vite --host --port 8648",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:isolated": "concurrently \"npm run dev:server:isolated\" \"npm run dev:client\"",
     "dev:client": "vite --host",
     "dev:server": "nodemon --signal SIGTERM --watch packages/server/src -e ts,tsx --exec TS_NODE_PROJECT=packages/server/tsconfig.json node -r ts-node/register packages/server/src/index.ts",
+    "dev:server:isolated": "HERMES_WEBUI_HOME=.runtime/.hermes-web-ui nodemon --signal SIGTERM --watch packages/server/src -e ts,tsx --exec TS_NODE_PROJECT=packages/server/tsconfig.json node -r ts-node/register packages/server/src/index.ts",
     "build": "vue-tsc -b && vite build && tsc --noEmit -p packages/server/tsconfig.json && node scripts/build-server.mjs",
     "prepare": "[ -d dist ] || npm run build",
     "preview": "NODE_ENV=production vite preview",
@@ -59,6 +61,11 @@
     "build:website": "vite build --config vite.config.website.ts",
     "preview:website": "vite preview --config vite.config.website.ts",
     "openapi:generate": "node scripts/generate-openapi.mjs",
+    "spec:new": "bash .specify/scripts/bash/create-new-feature.sh",
+    "spec:plan": "bash .specify/scripts/bash/setup-plan.sh",
+    "spec:tasks": "bash .specify/scripts/bash/setup-tasks.sh",
+    "spec:checklist": "bash .specify/scripts/bash/setup-checklist.sh",
+    "spec:doctor": "bash -n .specify/scripts/bash/*.sh",
     "claude": "claude --dangerously-skip-permissions"
   },
   "files": [
@@ -77,6 +84,8 @@
     "@koa/bodyparser": "^5.0.0",
     "@koa/cors": "^5.0.0",
     "@koa/router": "^15.4.0",
+    "@logicflow/core": "^2.2.3",
+    "@logicflow/extension": "^2.2.3",
     "@multiavatar/multiavatar": "^1.0.7",
     "@pinia/testing": "^1.0.3",
     "@types/eventsource": "^1.1.15",
@@ -125,5 +134,6 @@
     "vue-router": "^4.6.4",
     "vue-tsc": "^3.2.6",
     "ws": "^8.20.0"
-  }
+  },
+  "packageManager": "pnpm@10.28.0+sha1.99bafbd81cd8141d21254ec30f60efd7d5028f14"
 }

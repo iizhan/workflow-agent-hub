@@ -3,14 +3,18 @@ import { ref, computed, watch, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import MessageItem from "./MessageItem.vue";
 import { useChatStore } from "@/stores/hermes/chat";
+import { useAppStore } from "@/stores/hermes/app";
 import thinkingVideoLight from "@/assets/thinking-light.mp4";
 import thinkingVideoDark from "@/assets/thinking-dark.mp4";
 import { useTheme } from "@/composables/useTheme";
+import { BRAND_CHAT_COPY, BRAND_FULL_NAME, BRAND_LOGO_PATH } from "@/constants/branding";
 
 const chatStore = useChatStore();
+const appStore = useAppStore();
 const { t } = useI18n();
 const { isDark } = useTheme();
 const listRef = ref<HTMLElement>();
+const gatewayHealthy = computed(() => appStore.gatewayStatus === 'running');
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
@@ -140,8 +144,12 @@ watch(currentToolCalls, () => {
 <template>
   <div ref="listRef" class="message-list">
     <div v-if="chatStore.messages.length === 0" class="empty-state">
-      <img src="/logo.png" alt="Hermes" class="empty-logo" />
-      <p>{{ t("chat.emptyState") }}</p>
+      <img :src="BRAND_LOGO_PATH" :alt="BRAND_FULL_NAME" class="empty-logo" />
+      <h2 class="empty-title">{{ BRAND_CHAT_COPY.emptyStateTitle }}</h2>
+      <p class="empty-body">{{ BRAND_CHAT_COPY.emptyStateBody }}</p>
+      <div class="empty-tip" :class="{ online: gatewayHealthy, offline: !gatewayHealthy }">
+        {{ gatewayHealthy ? t("chat.emptyStateTipConnected") : t("chat.emptyStateTipDisconnected") }}
+      </div>
     </div>
     <MessageItem
       v-for="msg in displayMessages"
@@ -366,6 +374,56 @@ watch(currentToolCalls, () => {
   }
 }
 
+.empty-state {
+  margin: auto;
+  max-width: 420px;
+  padding: 32px 28px;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.08);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.06), rgba(var(--accent-primary-rgb), 0.02));
+  text-align: center;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.06);
+}
+
+.empty-logo {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 16px;
+  opacity: 0.92;
+}
+
+.empty-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.empty-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: $text-secondary;
+}
+
+.empty-tip {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.empty-tip.online {
+  color: color-mix(in srgb, $success 75%, $text-primary 25%);
+  background: rgba(var(--success-rgb), 0.10);
+}
+
+.empty-tip.offline {
+  color: color-mix(in srgb, $error 75%, $text-primary 25%);
+  background: rgba(var(--error-rgb, 239, 68, 68), 0.10);
+}
+
 .queue-float-panel {
   position: sticky;
   right: 16px;
@@ -565,26 +623,6 @@ watch(currentToolCalls, () => {
 .queue-float-leave-to {
   opacity: 0;
   transform: translateY(10px) scale(0.98);
-}
-
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: $text-muted;
-  gap: 12px;
-
-  .empty-logo {
-    width: 48px;
-    height: 48px;
-    opacity: 0.25;
-  }
-
-  p {
-    font-size: 14px;
-  }
 }
 
 .fade-enter-active,

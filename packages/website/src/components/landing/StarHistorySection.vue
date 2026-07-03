@@ -1,27 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScrollReveal } from '@/composables/useScrollReveal'
-import { useTheme } from '@/composables/useTheme'
 
 const { t } = useI18n()
-const { isDark } = useTheme()
 useScrollReveal()
-
-const stars = ref<number | null>(null)
-
-const chartSrc = computed(() => {
-  const base = 'https://api.star-history.com/svg?repos=EKKOLearnAI%2Fhermes-web-ui&type=Date'
-  return isDark.value ? `${base}&theme=dark` : base
-})
-
-onMounted(async () => {
-  try {
-    const res = await fetch('https://api.github.com/repos/EKKOLearnAI/hermes-web-ui')
-    const data = await res.json()
-    stars.value = data.stargazers_count
-  } catch {}
-})
 </script>
 
 <template>
@@ -32,42 +14,19 @@ onMounted(async () => {
     <div class="star-badges reveal reveal-delay-1">
       <a
         class="star-btn"
-        href="https://github.com/EKKOLearnAI/hermes-web-ui"
+        href="https://gitee.com/keyDemo/workflow-agent-hub"
         target="_blank"
         rel="noopener"
       >
         <svg viewBox="0 0 24 24" fill="currentColor" class="star-icon">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
         </svg>
-        <span>Star</span>
-        <span v-if="stars !== null" class="star-count">{{ stars.toLocaleString() }}</span>
+        <span>{{ t('nav.github') }}</span>
       </a>
 
-      <img
-        class="github-badge"
-        src="https://img.shields.io/github/license/EKKOLearnAI/hermes-web-ui?style=flat-square"
-        alt="License"
-      />
-      <img
-        class="github-badge"
-        src="https://img.shields.io/github/v/release/EKKOLearnAI/hermes-web-ui?style=flat-square"
-        alt="Version"
-      />
-    </div>
-
-    <div class="star-chart reveal reveal-delay-2">
-      <a
-        href="https://www.star-history.com/?type=date&repos=EKKOLearnAI%2Fhermes-web-ui"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="chart-link"
-      >
-        <img
-          :src="chartSrc"
-          alt="Star History"
-          class="chart-img"
-        />
-      </a>
+      <span class="github-badge fake-badge">Gitee</span>
+      <span class="github-badge fake-badge">MIT</span>
+      <span class="github-badge fake-badge">Self-hosted</span>
     </div>
   </div>
 </template>
@@ -147,24 +106,13 @@ onMounted(async () => {
   border-radius: 2px;
 }
 
-.star-chart {
-  flex: 1;
-  display: flex;
+.fake-badge {
+  display: inline-flex;
   align-items: center;
-}
-
-.chart-link {
-  display: block;
-  width: 100%;
-}
-
-.chart-img {
-  width: 100%;
-  border-radius: $radius-sm;
-  transition: opacity $transition-fast;
-
-  &:hover {
-    opacity: 0.85;
-  }
+  padding: 0 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 </style>

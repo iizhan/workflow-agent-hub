@@ -2,15 +2,15 @@ export default {
   nav: {
     home: 'Home',
     docs: 'Documentation',
-    github: 'GitHub',
+    github: 'Repository',
     qqGroup: 'QQ Group',
   },
   hero: {
     title: 'Self-Hosted AI Chat Dashboard',
     subtitle: 'Open-source AI agent dashboard — streaming chat, multi-model routing, Kanban boards, usage analytics, web terminal, all in one self-hosted interface.',
     cta: 'Get Started',
-    viewGithub: 'View on GitHub',
-    install: 'npm install -g hermes-web-ui',
+    viewGithub: 'View Repository',
+    install: 'git clone https://gitee.com/keyDemo/workflow-agent-hub.git',
   },
   features: {
     title: 'Everything You Need',
@@ -78,20 +78,20 @@ export default {
   },
   install: {
     title: 'Quick Start',
-    desc: 'Get Hermes Web UI running in under a minute.',
+    desc: 'Launch Workflow Agent Hub in a local workspace in under a minute.',
     npm: {
-      title: 'npm',
-      cmd1: 'npm install -g hermes-web-ui',
-      cmd2: 'hermes-web-ui start',
+      title: 'Local Workspace',
+      cmd1: 'git clone https://gitee.com/keyDemo/workflow-agent-hub.git',
+      cmd2: 'cd workflow-agent-hub && pnpm install && pnpm dev',
     },
     docker: {
       title: 'Docker',
       cmd: 'docker compose up -d',
     },
     source: {
-      title: 'From Source',
-      cmd1: 'git clone https://github.com/EKKOLearnAI/hermes-web-ui.git',
-      cmd2: 'cd hermes-web-ui && npm install && npm run dev',
+      title: 'Build',
+      cmd1: 'pnpm build',
+      cmd2: 'pnpm preview',
     },
     prereq: 'Requires Node.js >= 23',
   },
@@ -100,7 +100,7 @@ export default {
     desc: 'Star us on GitHub and join the community.',
   },
   footer: {
-    description: 'Self-hosted AI chat dashboard for Hermes Agent.',
+    description: 'Self-hosted workspace for agent orchestration, execution, and collaboration.',
     license: 'MIT License',
     madeWith: 'Built with Vue 3, Naive UI, and TypeScript.',
   },
@@ -114,14 +114,14 @@ export default {
     },
     gettingStarted: {
       title: 'Getting Started',
-      intro: 'Hermes Web UI is a self-hosted web dashboard for managing AI conversations, platform channels, scheduled jobs, and more. It wraps the Hermes Agent CLI and provides a beautiful web interface.',
+      intro: 'Workflow Agent Hub is a self-hosted workspace for managing AI conversations, platform channels, scheduled jobs, workflow execution, and more.',
       install: {
         title: 'Installation',
         content: 'Install globally via npm. Node.js 23 or higher is required.',
       },
       firstRun: {
         title: 'First Run',
-        content: 'On first start, Hermes Web UI will automatically generate an auth token, validate configuration files, start the Hermes gateway, and open the dashboard in your browser.',
+        content: 'On first start, Workflow Agent Hub generates an auth token, validates runtime configuration, starts the gateway, and opens the workspace in your browser.',
       },
       login: {
         title: 'Login',
@@ -130,7 +130,7 @@ export default {
     },
     configuration: {
       title: 'Configuration',
-      intro: 'Hermes Web UI can be configured via environment variables.',
+      intro: 'Workflow Agent Hub can be configured via environment variables.',
       envVars: {
         title: 'Environment Variables',
         rows: [
@@ -145,16 +145,16 @@ export default {
       },
       gateway: {
         title: 'Gateway Management',
-        content: 'The gateway is the Hermes Agent process that handles AI conversations. Hermes Web UI manages the gateway lifecycle — start, stop, and monitor from the Gateways page. Multiple gateways can run with different profiles, and each profile resolves its own gateway host/port from its Hermes config.',
+        content: 'The gateway is the runtime agent process that handles AI conversations. Workflow Agent Hub manages its lifecycle from the Gateways page, and each profile resolves its own gateway host and port from runtime config.',
       },
       profiles: {
         title: 'Profiles',
-        content: 'Profiles provide isolated configurations for different use cases. Each profile has its own Hermes config, cache, and gateway. Create, clone, import, or export profiles from the Profiles page.',
+        content: 'Profiles provide isolated configurations for different use cases. Each profile has its own runtime config, cache, and gateway. Create, clone, import, or export profiles from the Profiles page.',
       },
     },
     features: {
       title: 'Features',
-      intro: 'Explore the core features of Hermes Web UI.',
+      intro: 'Explore the core features of Workflow Agent Hub.',
       chat: {
         title: 'AI Chat',
         content: 'Real-time streaming chat powered by Server-Sent Events. Supports multi-session management, Markdown rendering with syntax highlighting, tool call inspection, file upload/download, and global search across all conversations (Ctrl+K).',
@@ -230,14 +230,14 @@ export default {
     },
     api: {
       title: 'API Reference',
-      intro: 'Hermes Web UI provides both a local BFF API and proxies requests to the upstream Hermes gateway.',
+      intro: 'Workflow Agent Hub provides both a local BFF API and compatibility proxy routes to the upstream runtime gateway.',
       local: {
         title: 'Local BFF Endpoints',
-        content: 'The Koa server handles session management, profile CRUD, config read/write, log access, skill listing, and memory operations. These endpoints call the Hermes CLI directly.',
+        content: 'The Koa server handles session management, profile CRUD, config read/write, log access, skill listing, and memory operations. These endpoints call the runtime CLI directly.',
       },
       proxy: {
         title: 'Gateway Proxy',
-        content: 'Requests to /api/hermes/v1/* are forwarded to the Hermes gateway. This includes AI model interactions, run management, and streaming events.',
+        content: 'Requests to /api/hermes/v1/* are forwarded to the runtime gateway through compatibility routes. This includes AI model interactions, run management, and streaming events.',
       },
       auth: {
         title: 'Authentication',

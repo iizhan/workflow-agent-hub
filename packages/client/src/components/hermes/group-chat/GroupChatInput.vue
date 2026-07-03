@@ -30,6 +30,7 @@ const filteredAgents = computed(() => {
 })
 
 const canSend = computed(() => !!inputText.value.trim())
+const canMentionAll = computed(() => store.agents.length > 0)
 
 // ─── Scroll active item into view ──────────────────────
 
@@ -131,6 +132,24 @@ function selectMention(name: string) {
     })
 }
 
+function mentionAllAgents() {
+    if (!store.agents.length) return
+    const mentions = store.agents.map(agent => `@${agent.name}`).join(' ')
+    inputText.value = inputText.value.trim()
+        ? `${inputText.value.trim()} ${mentions} `
+        : `${mentions} `
+    mentionActive.value = false
+
+    nextTick(() => {
+        const el = textareaRef.value
+        if (!el) return
+        el.focus()
+        el.setSelectionRange(inputText.value.length, inputText.value.length)
+        el.style.height = 'auto'
+        el.style.height = Math.min(el.scrollHeight, 100) + 'px'
+    })
+}
+
 // ─── Event Handlers ──────────────────────────────────────
 
 function handleKeydown(e: KeyboardEvent) {
@@ -228,6 +247,30 @@ function handleCompositionEnd() {
         updateMentionState()
     })
 }
+
+function focusInput() {
+    nextTick(() => {
+        if (!textareaRef.value) return
+        textareaRef.value.focus()
+        textareaRef.value.setSelectionRange(inputText.value.length, inputText.value.length)
+    })
+}
+
+function setDraft(text: string) {
+    inputText.value = text
+    nextTick(() => {
+        if (!textareaRef.value) return
+        textareaRef.value.style.height = 'auto'
+        textareaRef.value.style.height = Math.min(textareaRef.value.scrollHeight, 100) + 'px'
+        textareaRef.value.focus()
+        textareaRef.value.setSelectionRange(inputText.value.length, inputText.value.length)
+    })
+}
+
+defineExpose({
+    focusInput,
+    setDraft,
+})
 </script>
 
 <template>
@@ -245,6 +288,14 @@ function handleCompositionEnd() {
                 @input="handleInput"
             />
             <div class="input-actions">
+                <NButton
+                    size="small"
+                    secondary
+                    :disabled="!canMentionAll"
+                    @click="mentionAllAgents"
+                >
+                    @{{ t('groupChat.allAgents') }}
+                </NButton>
                 <NButton
                     size="small"
                     type="primary"

@@ -12,6 +12,9 @@ export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
 
   const connected = ref(false)
+  const gatewayStatus = ref<'running' | 'stopped'>('stopped')
+  const healthChecked = ref(false)
+  const healthChecking = ref(true)
   const serverVersion = ref(WEB_UI_VERSION)
   const latestVersion = ref('')
   const updateAvailable = ref(false)
@@ -43,15 +46,22 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function checkConnection() {
+    healthChecking.value = true
     try {
       const res = await checkHealth()
       connected.value = res.status === 'ok'
+      gatewayStatus.value = res.gateway === 'running' ? 'running' : 'stopped'
+      healthChecked.value = true
       if (res.webui_version) serverVersion.value = res.webui_version
       if (res.webui_latest) latestVersion.value = res.webui_latest
       updateAvailable.value = !!res.webui_update_available
       if (res.node_version) nodeVersion.value = res.node_version
     } catch {
       connected.value = false
+      gatewayStatus.value = 'stopped'
+      healthChecked.value = true
+    } finally {
+      healthChecking.value = false
     }
   }
 
@@ -69,8 +79,10 @@ export const useAppStore = defineStore('app', () => {
   async function switchModel(modelId: string, providerOverride?: string) {
     try {
       // Find the group containing this model to get provider info
-      const group = modelGroups.value.find(g => g.models.includes(modelId))
+      const group = modelGroups.value.find(g => !g.user_disabled && g.models.includes(modelId))
       const provider = providerOverride || group?.provider || ''
+      const targetGroup = modelGroups.value.find(g => g.provider === provider)
+      if (targetGroup?.user_disabled || targetGroup?.model_meta?.[modelId]?.disabled) return
       await updateDefaultModel({ default: modelId, provider })
       selectedModel.value = modelId
       selectedProvider.value = provider || ''
@@ -123,6 +135,9 @@ export const useAppStore = defineStore('app', () => {
     closeSidebar,
     toggleSidebarCollapsed,
     connected,
+    gatewayStatus,
+    healthChecked,
+    healthChecking,
     serverVersion,
     latestVersion,
     nodeVersion,

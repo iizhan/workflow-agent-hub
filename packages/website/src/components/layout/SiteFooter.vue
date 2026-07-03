@@ -9,8 +9,8 @@ const { t } = useI18n()
     <div class="footer-inner">
       <div class="footer-left">
         <div class="footer-brand">
-          <img src="/logo.png" alt="Hermes" class="footer-logo" />
-          <span>Hermes Web UI</span>
+          <img src="/logo.png" alt="Workflow Agent Hub" class="footer-logo" />
+          <span>Workflow Agent Hub</span>
         </div>
         <p class="footer-desc">{{ t('footer.description') }}</p>
       </div>
@@ -19,7 +19,7 @@ const { t } = useI18n()
         <p class="footer-meta">{{ t('footer.license') }}</p>
         <a
           class="footer-github"
-          href="https://github.com/EKKOLearnAI/hermes-web-ui"
+          href="https://gitee.com/keyDemo/workflow-agent-hub"
           target="_blank"
           rel="noopener"
         >

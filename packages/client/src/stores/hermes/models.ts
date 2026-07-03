@@ -51,8 +51,35 @@ export const useModelsStore = defineStore('models', () => {
     appStore.loadModels()
   }
 
+  async function setModelEnabled(provider: string, model: string, enabled: boolean) {
+    await systemApi.updateModelEnabled(provider, model, enabled)
+    await fetchProviders()
+    const appStore = useAppStore()
+    await appStore.loadModels()
+  }
+
+  async function setProviderEnabled(provider: string, enabled: boolean) {
+    await systemApi.updateProviderEnabled(provider, enabled)
+    await fetchProviders()
+    const appStore = useAppStore()
+    await appStore.loadModels()
+  }
+
   async function addProvider(data: CustomProvider) {
     await systemApi.addCustomProvider(data)
+    await fetchProviders()
+    const appStore = useAppStore()
+    appStore.loadModels()
+  }
+
+  async function updateProvider(poolKey: string, data: {
+    name?: string
+    base_url?: string
+    api_key?: string
+    model?: string
+    context_length?: number | null
+  }) {
+    await systemApi.updateProvider(poolKey, data)
     await fetchProviders()
     const appStore = useAppStore()
     appStore.loadModels()
@@ -75,7 +102,10 @@ export const useModelsStore = defineStore('models', () => {
     allModels,
     fetchProviders,
     setDefaultModel,
+    setModelEnabled,
+    setProviderEnabled,
     addProvider,
+    updateProvider,
     removeProvider,
   }
 })

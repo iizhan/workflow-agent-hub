@@ -57,6 +57,20 @@ export interface RunEvent {
 let chatRunSocket: Socket | null = null
 let globalListenersRegistered = false
 
+function generateUUID(): string {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
+function getStoredChatUserId(): string {
+  let userId = localStorage.getItem('gc_user_id') || localStorage.getItem('hermes_chat_user_id')
+  if (!userId) {
+    userId = generateUUID()
+  }
+  localStorage.setItem('gc_user_id', userId)
+  localStorage.setItem('hermes_chat_user_id', userId)
+  return userId
+}
+
 /**
  * Session event handlers map
  * Maps session_id to event handling functions for isolating concurrent session streams
@@ -359,7 +373,10 @@ export function connectChatRun(): Socket {
   }
 
   chatRunSocket = io(`${baseUrl}/chat-run`, {
-    auth: { token },
+    auth: {
+      token,
+      userId: getStoredChatUserId(),
+    },
     query: { profile },
     transports: ['websocket', 'polling'],
     reconnection: true,

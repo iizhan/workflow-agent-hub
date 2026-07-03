@@ -59,6 +59,18 @@ export interface Session {
   workspace?: string | null
 }
 
+export type SessionIssueKind =
+  | 'resume_timeout'
+  | 'stream_disconnected'
+  | 'run_failed'
+  | 'empty_output'
+
+export interface SessionIssue {
+  kind: SessionIssueKind
+  message?: string
+  at: number
+}
+
 function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 }
@@ -361,6 +373,38 @@ export const useChatStore = defineStore('chat', () => {
 
   const activeSession = ref<Session | null>(null)
   const messages = computed<Message[]>(() => activeSession.value?.messages || [])
+  const sessionIssues = ref<Map<string, SessionIssue>>(new Map())
+  const activeSessionIssue = computed<SessionIssue | null>(() => {
+    const sid = activeSessionId.value
+    if (!sid) return null
+    return sessionIssues.value.get(sid) || null
+  })
+
+  function setSessionIssue(sessionId: string, issue: Omit<SessionIssue, 'at'> & { at?: number }) {
+    sessionIssues.value.set(sessionId, {
+      ...issue,
+      at: issue.at ?? Date.now(),
+    })
+  }
+
+  function clearSessionIssue(sessionId: string, kinds?: SessionIssueKind | SessionIssueKind[]) {
+    const current = sessionIssues.value.get(sessionId)
+    if (!current) return
+    if (!kinds) {
+      sessionIssues.value.delete(sessionId)
+      return
+    }
+    const targets = Array.isArray(kinds) ? kinds : [kinds]
+    if (targets.includes(current.kind)) {
+      sessionIssues.value.delete(sessionId)
+    }
+  }
+
+  function dismissActiveSessionIssue() {
+    const sid = activeSessionId.value
+    if (!sid) return
+    sessionIssues.value.delete(sid)
+  }
 
   function isSessionLive(sessionId: string): boolean {
     return streamStates.value.has(sessionId) || serverWorking.value.has(sessionId)
@@ -506,8 +550,14 @@ export const useChatStore = defineStore('chat', () => {
           resolve()
         })
       })
+      clearSessionIssue(sessionId, ['resume_timeout', 'stream_disconnected'])
     } catch (err) {
       console.error('Failed to load session messages via resume:', err)
+      const reason = err instanceof Error ? err.message : ''
+      setSessionIssue(sessionId, {
+        kind: 'resume_timeout',
+        message: reason || undefined,
+      })
     } finally {
       isLoadingMessages.value = false
     }
@@ -653,6 +703,7 @@ export const useChatStore = defineStore('chat', () => {
     // Capture session ID at send time — all callbacks use this, not activeSessionId
     const sid = activeSessionId.value!
     const shouldQueue = isSessionLive(sid)
+    clearSessionIssue(sid)
 
     const userMsg: Message = {
       id: uid(),
@@ -756,6 +807,7 @@ export const useChatStore = defineStore('chat', () => {
           switch (evt.event) {
             case 'run.started':
               setAbortState(null)
+              clearSessionIssue(sid)
               runProducedAssistantText = false
               runHadToolActivity = false
               closeStreamingAssistant()
@@ -1020,6 +1072,9 @@ export const useChatStore = defineStore('chat', () => {
                 !runHadToolActivity &&
                 finalOutputTrimmed === ''
               if (swallowedError) {
+                setSessionIssue(sid, {
+                  kind: 'empty_output',
+                })
                 addMessage(sid, {
                   id: uid(),
                   role: 'system',
@@ -1042,6 +1097,10 @@ export const useChatStore = defineStore('chat', () => {
                 }
               }
 
+              if (!swallowedError) {
+                clearSessionIssue(sid)
+              }
+
               if ((evt as any).queue_remaining > 0) {
                 queueLengths.value.set(sid, (evt as any).queue_remaining)
               } else {
@@ -1053,6 +1112,10 @@ export const useChatStore = defineStore('chat', () => {
             }
 
             case 'run.failed': {
+              setSessionIssue(sid, {
+                kind: 'run_failed',
+                message: evt.error || undefined,
+              })
               const msgs = getSessionMsgs(sid)
               const lastErr = msgs[msgs.length - 1]
               if (lastErr?.isStreaming) {
@@ -1105,6 +1168,10 @@ export const useChatStore = defineStore('chat', () => {
         // onError
         (err) => {
           console.warn('Socket.IO run stream error:', err.message)
+          setSessionIssue(sid, {
+            kind: 'stream_disconnected',
+            message: err.message || undefined,
+          })
           const msgs = getSessionMsgs(sid)
           const last = msgs[msgs.length - 1]
           if (last?.isStreaming) {
@@ -1186,6 +1253,7 @@ export const useChatStore = defineStore('chat', () => {
 
         case 'run.started':
           setAbortState(null)
+          clearSessionIssue(sid)
           runProducedAssistantText = false
           runHadToolActivity = false
           closeStreamingAssistant()
@@ -1417,6 +1485,9 @@ export const useChatStore = defineStore('chat', () => {
           }
           const swallowedError = !runProducedAssistantText && !runHadToolActivity && finalOutputTrimmed === ''
           if (swallowedError) {
+            setSessionIssue(sid, {
+              kind: 'empty_output',
+            })
             addMessage(sid, {
               id: uid(),
               role: 'system',
@@ -1438,6 +1509,10 @@ export const useChatStore = defineStore('chat', () => {
             }
           }
 
+          if (!swallowedError) {
+            clearSessionIssue(sid)
+          }
+
           if (!hasQueue) {
             cleanup()
             activeAssistantMessageId = null
@@ -1450,6 +1525,10 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         case 'run.failed': {
+          setSessionIssue(sid, {
+            kind: 'run_failed',
+            message: evt.error || undefined,
+          })
           const hasQueue = (evt as any).queue_remaining > 0
           if (hasQueue) {
             queueLengths.value.set(sid, (evt as any).queue_remaining)
@@ -1648,6 +1727,7 @@ export const useChatStore = defineStore('chat', () => {
     activeSession,
     focusMessageId,
     messages,
+    activeSessionIssue,
     isStreaming,
     isRunActive,
     isSessionLive,
@@ -1665,6 +1745,9 @@ export const useChatStore = defineStore('chat', () => {
     switchSession,
     switchSessionModel,
     addOrUpdateSession,
+    setSessionIssue,
+    clearSessionIssue,
+    dismissActiveSessionIssue,
     clearProviderFromSessions,
     deleteSession,
     sendMessage,

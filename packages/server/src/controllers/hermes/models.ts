@@ -10,6 +10,58 @@ import { MODEL_CONTEXT_TABLE } from '../../db/hermes/schemas'
 
 const PROVIDER_MODEL_CATALOG = buildProviderModelMap()
 
+type ModelMeta = { preview?: boolean; disabled?: boolean; user_disabled?: boolean }
+
+function normalizeProviderForConfig(provider: string): string {
+  return String(provider || '').trim()
+}
+
+function normalizeModelForConfig(model: string): string {
+  return String(model || '').trim()
+}
+
+function getDisabledModelMap(config: any): Record<string, string[]> {
+  const disabled = config?.model?.disabled_models
+  if (!disabled || typeof disabled !== 'object' || Array.isArray(disabled)) return {}
+  const result: Record<string, string[]> = {}
+  for (const [provider, models] of Object.entries(disabled)) {
+    if (!Array.isArray(models)) continue
+    const clean = models.map(item => normalizeModelForConfig(String(item))).filter(Boolean)
+    if (clean.length > 0) result[normalizeProviderForConfig(provider)] = Array.from(new Set(clean))
+  }
+  return result
+}
+
+function getDisabledProviders(config: any): string[] {
+  const disabled = config?.model?.disabled_providers
+  if (!Array.isArray(disabled)) return []
+  return Array.from(new Set(disabled.map(item => normalizeProviderForConfig(String(item))).filter(Boolean))).sort()
+}
+
+function isUserDisabledModel(config: any, provider: string, model: string): boolean {
+  const disabled = getDisabledModelMap(config)
+  return (disabled[normalizeProviderForConfig(provider)] || []).includes(normalizeModelForConfig(model))
+}
+
+function isUserDisabledProvider(config: any, provider: string): boolean {
+  return getDisabledProviders(config).includes(normalizeProviderForConfig(provider))
+}
+
+function applyUserDisabledMeta(config: any, provider: string, models: string[], modelMeta?: Record<string, ModelMeta>): Record<string, ModelMeta> | undefined {
+  const disabled = getDisabledModelMap(config)[normalizeProviderForConfig(provider)] || []
+  if (disabled.length === 0) return modelMeta
+  const next: Record<string, ModelMeta> = { ...(modelMeta || {}) }
+  for (const model of models) {
+    if (!disabled.includes(model)) continue
+    next[model] = {
+      ...(next[model] || {}),
+      disabled: true,
+      user_disabled: true,
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
 // Copilot 授权检测：复用同一套 token 解析逻辑（含 ~/.config/github-copilot/apps.json
 // 与 ghp_ PAT 跳过），与 getCopilotModels 行为一致，避免出现"模型能拉到却被判未授权"。
 async function isCopilotAuthorized(envContent: string): Promise<boolean> {
@@ -41,7 +93,18 @@ export async function getAvailable(ctx: any) {
       currentDefault = modelSection.trim()
     }
 
-    const groups: Array<{ provider: string; label: string; base_url: string; models: string[]; api_key: string; builtin?: boolean; model_meta?: Record<string, { preview?: boolean; disabled?: boolean }> }> = []
+    const groups: Array<{
+      provider: string
+      label: string
+      base_url: string
+      models: string[]
+      api_key: string
+      primary_model?: string
+      context_length?: number | null
+      builtin?: boolean
+      user_disabled?: boolean
+      model_meta?: Record<string, ModelMeta>
+    }> = []
     const seenProviders = new Set<string>()
 
     let envContent = ''
@@ -57,10 +120,32 @@ export async function getAvailable(ctx: any) {
       const match = envContent.match(new RegExp(`^${key}\\s*=\\s*(.+)`, 'm'))
       return match?.[1]?.trim() || ''
     }
-    const addGroup = (provider: string, label: string, base_url: string, models: string[], api_key: string, builtin?: boolean, model_meta?: Record<string, { preview?: boolean; disabled?: boolean }>) => {
+    const addGroup = (
+      provider: string,
+      label: string,
+      base_url: string,
+      models: string[],
+      api_key: string,
+      builtin?: boolean,
+      model_meta?: Record<string, ModelMeta>,
+      primary_model?: string,
+      context_length?: number | null,
+    ) => {
       if (seenProviders.has(provider)) return
       seenProviders.add(provider)
-      groups.push({ provider, label, base_url, models: [...models], api_key, ...(builtin ? { builtin: true } : {}), ...(model_meta ? { model_meta } : {}) })
+      const disabledMeta = applyUserDisabledMeta(config, provider, models, model_meta)
+      groups.push({
+        provider,
+        label,
+        base_url,
+        models: [...models],
+        api_key,
+        ...(primary_model ? { primary_model } : {}),
+        ...(context_length != null ? { context_length } : {}),
+        ...(builtin ? { builtin: true } : {}),
+        ...(isUserDisabledProvider(config, provider) ? { user_disabled: true } : {}),
+        ...(disabledMeta ? { model_meta: disabledMeta } : {}),
+      })
     }
 
     const isOAuthAuthorized = (providerKey: string): boolean => {
@@ -120,7 +205,7 @@ export async function getAvailable(ctx: any) {
       }
       const catalogModels = PROVIDER_MODEL_CATALOG[providerKey]
       let modelsList: string[] = catalogModels && catalogModels.length > 0 ? [...catalogModels] : []
-      let modelMeta: Record<string, { preview?: boolean; disabled?: boolean }> | undefined
+      let modelMeta: Record<string, ModelMeta> | undefined
       if (providerKey === 'copilot') {
         const live = await getCopilotLive()
         if (live.length > 0) {
@@ -155,7 +240,13 @@ export async function getAvailable(ctx: any) {
     }
 
     const customProviders = Array.isArray(config.custom_providers)
-      ? config.custom_providers as Array<{ name: string; base_url: string; model: string; api_key?: string }>
+      ? config.custom_providers as Array<{
+        name: string
+        base_url: string
+        model: string
+        api_key?: string
+        models?: Record<string, { context_length?: number }>
+      }>
       : []
 
     const customFetches = await Promise.allSettled(
@@ -172,14 +263,35 @@ export async function getAvailable(ctx: any) {
         }
         const label = builtinPreset?.label || cp.name
         const presetBaseUrl = builtinPreset?.base_url || ''
-        return { providerKey, label, base_url: presetBaseUrl || baseUrl, models, api_key: cp.api_key || '', builtin: !!builtinPreset }
+        const contextLength = typeof cp.models?.[cp.model]?.context_length === 'number'
+          ? cp.models[cp.model].context_length
+          : null
+        return {
+          providerKey,
+          label,
+          base_url: presetBaseUrl || baseUrl,
+          models,
+          api_key: cp.api_key || '',
+          builtin: !!builtinPreset,
+          primary_model: cp.model,
+          context_length: contextLength,
+        }
       }),
     )
 
     for (const result of customFetches) {
       if (result.status === 'fulfilled' && result.value) {
-        const { providerKey, label, base_url, models, api_key: cpApiKey, builtin: cpBuiltin } = result.value as any
-        addGroup(providerKey, label, base_url, models, cpApiKey, cpBuiltin)
+        const {
+          providerKey,
+          label,
+          base_url,
+          models,
+          api_key: cpApiKey,
+          builtin: cpBuiltin,
+          primary_model: cpPrimaryModel,
+          context_length: cpContextLength,
+        } = result.value as any
+        addGroup(providerKey, label, base_url, models, cpApiKey, cpBuiltin, undefined, cpPrimaryModel, cpContextLength)
       }
     }
 
@@ -201,6 +313,15 @@ export async function getAvailable(ctx: any) {
       const fallback = buildModelGroups(config)
       ctx.body = { ...fallback, allProviders: allProvidersBase }
       return
+    }
+
+    if (
+      currentDefault
+      && currentDefaultProvider
+      && (isUserDisabledProvider(config, currentDefaultProvider) || isUserDisabledModel(config, currentDefaultProvider, currentDefault))
+    ) {
+      currentDefault = ''
+      currentDefaultProvider = ''
     }
 
     ctx.body = { default: currentDefault, default_provider: currentDefaultProvider, groups, allProviders: allProvidersBase }
@@ -229,9 +350,110 @@ export async function setConfigModel(ctx: any) {
   }
   try {
     const config = await readConfigYaml()
+    const disabledModels = getDisabledModelMap(config)
+    const disabledProviders = getDisabledProviders(config)
     config.model = {}
     config.model.default = defaultModel
     if (reqProvider) { config.model.provider = reqProvider }
+    if (Object.keys(disabledModels).length > 0) {
+      config.model.disabled_models = disabledModels
+    }
+    if (disabledProviders.length > 0) {
+      config.model.disabled_providers = disabledProviders
+    }
+    await writeConfigYaml(config)
+    ctx.body = { success: true }
+  } catch (err: any) {
+    ctx.status = 500
+    ctx.body = { error: err.message }
+  }
+}
+
+export async function setModelEnabled(ctx: any) {
+  const { provider, model, enabled } = ctx.request.body as { provider?: string; model?: string; enabled?: boolean }
+  const providerKey = normalizeProviderForConfig(provider || '')
+  const modelName = normalizeModelForConfig(model || '')
+
+  if (!providerKey || !modelName || typeof enabled !== 'boolean') {
+    ctx.status = 400
+    ctx.body = { error: 'Missing required fields: provider, model, enabled' }
+    return
+  }
+
+  try {
+    const config = await readConfigYaml()
+    if (typeof config.model !== 'object' || config.model === null || Array.isArray(config.model)) {
+      config.model = {}
+    }
+
+    const disabledMap = getDisabledModelMap(config)
+    const current = new Set(disabledMap[providerKey] || [])
+
+    if (enabled) current.delete(modelName)
+    else current.add(modelName)
+
+    if (!config.model.disabled_models || typeof config.model.disabled_models !== 'object' || Array.isArray(config.model.disabled_models)) {
+      config.model.disabled_models = {}
+    }
+
+    if (current.size > 0) {
+      config.model.disabled_models[providerKey] = Array.from(current).sort()
+    } else {
+      delete config.model.disabled_models[providerKey]
+    }
+
+    if (Object.keys(config.model.disabled_models).length === 0) {
+      delete config.model.disabled_models
+    }
+
+    if (!enabled && String(config.model.provider || '').trim() === providerKey && String(config.model.default || '').trim() === modelName) {
+      delete config.model.default
+      delete config.model.provider
+      delete config.model.base_url
+      delete config.model.api_key
+    }
+
+    await writeConfigYaml(config)
+    ctx.body = { success: true }
+  } catch (err: any) {
+    ctx.status = 500
+    ctx.body = { error: err.message }
+  }
+}
+
+export async function setProviderEnabled(ctx: any) {
+  const { provider, enabled } = ctx.request.body as { provider?: string; enabled?: boolean }
+  const providerKey = normalizeProviderForConfig(provider || '')
+
+  if (!providerKey || typeof enabled !== 'boolean') {
+    ctx.status = 400
+    ctx.body = { error: 'Missing required fields: provider, enabled' }
+    return
+  }
+
+  try {
+    const config = await readConfigYaml()
+    if (typeof config.model !== 'object' || config.model === null || Array.isArray(config.model)) {
+      config.model = {}
+    }
+
+    const disabledProviders = new Set(getDisabledProviders(config))
+    if (enabled) disabledProviders.delete(providerKey)
+    else disabledProviders.add(providerKey)
+
+    if (disabledProviders.size > 0) {
+      config.model.disabled_providers = Array.from(disabledProviders).sort()
+    } else {
+      delete config.model.disabled_providers
+    }
+
+    if (!enabled && String(config.model.provider || '').trim() === providerKey) {
+      delete config.model.default
+      delete config.model.provider
+      delete config.model.base_url
+      delete config.model.api_key
+    }
+
     await writeConfigYaml(config)
     ctx.body = { success: true }
   } catch (err: any) {

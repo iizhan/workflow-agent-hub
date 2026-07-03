@@ -16,6 +16,7 @@ import {
   renderHighlightedCodeBlock,
 } from "./highlight";
 import { useGlobalSpeech } from "@/composables/useSpeech";
+import { BRAND_ASSISTANT_AVATAR_PATH, BRAND_ASSISTANT_NAME } from "@/constants/branding";
 
 const TOOL_PAYLOAD_DISPLAY_LIMIT = 2000;
 
@@ -465,8 +466,8 @@ onBeforeUnmount(() => {
       <div class="msg-body">
         <img
           v-if="message.role === 'assistant'"
-          src="/logo.png"
-          alt="Hermes"
+          :src="BRAND_ASSISTANT_AVATAR_PATH"
+          :alt="BRAND_ASSISTANT_NAME"
           class="msg-avatar"
         />
         <div class="msg-content" :class="message.role">

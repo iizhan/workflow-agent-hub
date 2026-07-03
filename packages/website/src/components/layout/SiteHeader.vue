@@ -31,8 +31,8 @@ function goHome() {
   <header class="site-header">
     <div class="header-inner">
       <div class="header-left" @click="goHome">
-        <img src="/logo.png" alt="Hermes" class="logo-icon" />
-        <span class="logo-text">Hermes Web UI</span>
+        <img src="/logo.png" alt="Workflow Agent Hub" class="logo-icon" />
+        <span class="logo-text">Workflow Agent Hub</span>
       </div>
 
       <nav class="header-nav">
@@ -40,7 +40,7 @@ function goHome() {
         <a class="nav-link" @click.prevent="navigateTo('docs.getting-started')">{{ t('nav.docs') }}</a>
         <a
           class="nav-link"
-          href="https://github.com/EKKOLearnAI/hermes-web-ui"
+          href="https://gitee.com/keyDemo/workflow-agent-hub"
           target="_blank"
           rel="noopener"
         >
@@ -88,7 +88,7 @@ function goHome() {
       <div class="mobile-menu-inner" @click.stop>
         <a class="mobile-link" @click.prevent="navigateTo('landing')">{{ t('nav.home') }}</a>
         <a class="mobile-link" @click.prevent="navigateTo('docs.getting-started')">{{ t('nav.docs') }}</a>
-        <a class="mobile-link" href="https://github.com/EKKOLearnAI/hermes-web-ui" target="_blank" rel="noopener">{{ t('nav.github') }}</a>
+        <a class="mobile-link" href="https://gitee.com/keyDemo/workflow-agent-hub" target="_blank" rel="noopener">{{ t('nav.github') }}</a>
         <a class="mobile-link" @click.prevent="showQQModal = true; mobileMenuOpen = false">{{ t('nav.qqGroup') }}</a>
         <div class="mobile-actions">
           <button class="mobile-action-btn" @click="switchLocale">

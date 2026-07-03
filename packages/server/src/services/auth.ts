@@ -1,11 +1,10 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { randomBytes } from 'crypto'
-import { homedir } from 'os'
 import { checkToken, recordTokenFailure, extractIp } from './login-limiter'
+import { getWebUiPath } from '../utils/webui-home'
 
-const APP_HOME = join(homedir(), '.hermes-web-ui')
-const TOKEN_FILE = join(APP_HOME, '.token')
+const APP_HOME = getWebUiPath()
+const TOKEN_FILE = getWebUiPath('.token')
 
 function generateToken(): string {
   return randomBytes(32).toString('hex')

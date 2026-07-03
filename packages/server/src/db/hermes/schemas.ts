@@ -105,6 +105,44 @@ export const MODEL_CONTEXT_SCHEMA: Record<string, string> = {
 export const MODEL_CONTEXT_INDEX = 'CREATE UNIQUE INDEX IF NOT EXISTS idx_model_context_provider_model ON model_context(provider, model)'
 
 // ============================================================================
+// Structured Memory Store
+// ============================================================================
+
+export const MEMORY_ENTRIES_TABLE = 'memory_entries'
+
+export const MEMORY_ENTRIES_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  profile: "TEXT NOT NULL DEFAULT 'default'",
+  section: 'TEXT NOT NULL',
+  scope_type: 'TEXT NOT NULL',
+  scope_id: 'TEXT NOT NULL',
+  user_id: "TEXT NOT NULL DEFAULT ''",
+  room_id: "TEXT NOT NULL DEFAULT ''",
+  agent_id: "TEXT NOT NULL DEFAULT ''",
+  memory_type: "TEXT NOT NULL DEFAULT 'fact'",
+  title: "TEXT NOT NULL DEFAULT ''",
+  content: "TEXT NOT NULL DEFAULT ''",
+  tags_json: "TEXT NOT NULL DEFAULT '[]'",
+  status: "TEXT NOT NULL DEFAULT 'active'",
+  confidence: 'INTEGER NOT NULL DEFAULT 100',
+  priority: 'INTEGER NOT NULL DEFAULT 50',
+  salience: 'INTEGER NOT NULL DEFAULT 50',
+  source_type: "TEXT NOT NULL DEFAULT 'manual'",
+  source_ref: "TEXT NOT NULL DEFAULT ''",
+  created_at: 'INTEGER NOT NULL',
+  updated_at: 'INTEGER NOT NULL',
+  last_accessed_at: 'INTEGER',
+  expires_at: 'INTEGER',
+  archived_at: 'INTEGER',
+}
+
+export const MEMORY_ENTRIES_SECTION_INDEX =
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_entries_profile_scope_section ON memory_entries(profile, scope_type, scope_id, section)'
+
+export const MEMORY_ENTRIES_STATUS_INDEX =
+  'CREATE INDEX IF NOT EXISTS idx_memory_entries_profile_status_updated ON memory_entries(profile, status, updated_at)'
+
+// ============================================================================
 // Group Chat (services/hermes/group-chat/index.ts)
 // ============================================================================
 
@@ -114,9 +152,17 @@ export const GC_ROOMS_SCHEMA: Record<string, string> = {
   id: 'TEXT PRIMARY KEY',
   name: 'TEXT NOT NULL',
   inviteCode: 'TEXT UNIQUE',
+  isSystemPreset: 'INTEGER NOT NULL DEFAULT 0',
+  isActive: 'INTEGER NOT NULL DEFAULT 0',
+  presetKey: "TEXT NOT NULL DEFAULT ''",
+  workflowName: "TEXT NOT NULL DEFAULT ''",
+  workflowPrompt: "TEXT NOT NULL DEFAULT ''",
+  workflowConfigJson: "TEXT NOT NULL DEFAULT '{}'",
+  defaultAgentsJson: "TEXT NOT NULL DEFAULT '[]'",
   triggerTokens: 'INTEGER NOT NULL DEFAULT 100000',
   maxHistoryTokens: 'INTEGER NOT NULL DEFAULT 32000',
   tailMessageCount: 'INTEGER NOT NULL DEFAULT 20',
+  runSequence: 'INTEGER NOT NULL DEFAULT 0',
   totalTokens: 'INTEGER NOT NULL DEFAULT 0',
 }
 
@@ -140,6 +186,10 @@ export const GC_ROOM_AGENTS_SCHEMA: Record<string, string> = {
   profile: 'TEXT NOT NULL',
   name: 'TEXT NOT NULL',
   description: "TEXT NOT NULL DEFAULT ''",
+  avatar: "TEXT NOT NULL DEFAULT ''",
+  systemPrompt: "TEXT NOT NULL DEFAULT ''",
+  model: "TEXT NOT NULL DEFAULT ''",
+  temperature: 'REAL',
   invited: 'INTEGER NOT NULL DEFAULT 0',
 }
 
@@ -186,6 +236,161 @@ export const GC_SESSION_PROFILES_SCHEMA: Record<string, string> = {
   agent_id: 'TEXT NOT NULL',
   profile_name: 'TEXT NOT NULL',
   created_at: 'INTEGER NOT NULL',
+}
+
+export const GC_PRESET_ROOM_TOMBSTONES_TABLE = 'gc_preset_room_tombstones'
+
+export const GC_PRESET_ROOM_TOMBSTONES_SCHEMA: Record<string, string> = {
+  presetKey: 'TEXT PRIMARY KEY',
+  deletedAt: 'INTEGER NOT NULL',
+}
+
+export const GC_WORKFLOW_RUNS_TABLE = 'gc_workflow_runs'
+
+export const GC_WORKFLOW_RUNS_SCHEMA: Record<string, string> = {
+  roomId: 'TEXT PRIMARY KEY',
+  workflowVersion: 'INTEGER NOT NULL DEFAULT 1',
+  runNumber: 'INTEGER NOT NULL DEFAULT 0',
+  status: "TEXT NOT NULL DEFAULT 'idle'",
+  currentNodeId: "TEXT NOT NULL DEFAULT ''",
+  kickoffSummary: "TEXT NOT NULL DEFAULT ''",
+  kickoffArtifactPath: "TEXT NOT NULL DEFAULT ''",
+  startedAt: 'INTEGER NOT NULL DEFAULT 0',
+  updatedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_WORKFLOW_NODE_RUNS_TABLE = 'gc_workflow_node_runs'
+
+export const GC_WORKFLOW_NODE_RUNS_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  roomId: 'TEXT NOT NULL',
+  nodeId: 'TEXT NOT NULL',
+  status: "TEXT NOT NULL DEFAULT 'pending'",
+  actorAgentName: "TEXT NOT NULL DEFAULT ''",
+  artifactIdsJson: "TEXT NOT NULL DEFAULT '[]'",
+  startedAt: 'INTEGER NOT NULL DEFAULT 0',
+  completedAt: 'INTEGER NOT NULL DEFAULT 0',
+  updatedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_WORKFLOW_ARTIFACTS_TABLE = 'gc_workflow_artifacts'
+
+export const GC_WORKFLOW_ARTIFACTS_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  roomId: 'TEXT NOT NULL',
+  nodeId: 'TEXT NOT NULL',
+  runNumber: 'INTEGER NOT NULL DEFAULT 0',
+  filePath: "TEXT NOT NULL DEFAULT ''",
+  relativePath: "TEXT NOT NULL DEFAULT ''",
+  format: "TEXT NOT NULL DEFAULT 'md'",
+  title: "TEXT NOT NULL DEFAULT ''",
+  summary: "TEXT NOT NULL DEFAULT ''",
+  createdBy: "TEXT NOT NULL DEFAULT ''",
+  createdAt: 'INTEGER NOT NULL DEFAULT 0',
+  confirmedBy: "TEXT NOT NULL DEFAULT ''",
+  confirmedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_WORKFLOW_RUN_HISTORY_TABLE = 'gc_workflow_run_history'
+
+export const GC_WORKFLOW_RUN_HISTORY_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  roomId: 'TEXT NOT NULL',
+  runNumber: 'INTEGER NOT NULL DEFAULT 0',
+  workflowVersion: 'INTEGER NOT NULL DEFAULT 1',
+  status: "TEXT NOT NULL DEFAULT 'idle'",
+  currentNodeId: "TEXT NOT NULL DEFAULT ''",
+  currentNodeTitle: "TEXT NOT NULL DEFAULT ''",
+  kickoffSummary: "TEXT NOT NULL DEFAULT ''",
+  kickoffArtifactPath: "TEXT NOT NULL DEFAULT ''",
+  startedAt: 'INTEGER NOT NULL DEFAULT 0',
+  endedAt: 'INTEGER NOT NULL DEFAULT 0',
+  completedNodeCount: 'INTEGER NOT NULL DEFAULT 0',
+  rejectedNodeCount: 'INTEGER NOT NULL DEFAULT 0',
+  pendingApprovalCount: 'INTEGER NOT NULL DEFAULT 0',
+  totalNodeRuns: 'INTEGER NOT NULL DEFAULT 0',
+  latestActorAgentName: "TEXT NOT NULL DEFAULT ''",
+  latestActivityNodeTitle: "TEXT NOT NULL DEFAULT ''",
+  latestActivityStatus: "TEXT NOT NULL DEFAULT ''",
+  latestActivityAt: 'INTEGER NOT NULL DEFAULT 0',
+  latestSystemNoticeExcerpt: "TEXT NOT NULL DEFAULT ''",
+  latestMessageExcerpt: "TEXT NOT NULL DEFAULT ''",
+  latestMessageSenderName: "TEXT NOT NULL DEFAULT ''",
+  latestApprovalActorName: "TEXT NOT NULL DEFAULT ''",
+  latestApprovalAction: "TEXT NOT NULL DEFAULT ''",
+  latestApprovalStageTitle: "TEXT NOT NULL DEFAULT ''",
+  latestApprovalReason: "TEXT NOT NULL DEFAULT ''",
+  latestCompletedNodeTitle: "TEXT NOT NULL DEFAULT ''",
+  latestRejectedNodeTitle: "TEXT NOT NULL DEFAULT ''",
+  latestPendingApprovalNodeTitle: "TEXT NOT NULL DEFAULT ''",
+  latestArtifactPath: "TEXT NOT NULL DEFAULT ''",
+  latestArtifactTitle: "TEXT NOT NULL DEFAULT ''",
+  projectId: "TEXT NOT NULL DEFAULT ''",
+  projectName: "TEXT NOT NULL DEFAULT ''",
+  projectGitEnabled: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitBranch: "TEXT NOT NULL DEFAULT ''",
+  projectGitRepoUrl: "TEXT NOT NULL DEFAULT ''",
+  projectGitTrackedAt: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitAheadCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitBehindCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitStagedCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitModifiedCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitUntrackedCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectGitChangeCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectTouchedFileCount: 'INTEGER NOT NULL DEFAULT 0',
+  projectTouchedFilesJson: "TEXT NOT NULL DEFAULT '[]'",
+  projectGitChangesJson: "TEXT NOT NULL DEFAULT '[]'",
+  updatedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_PROJECTS_TABLE = 'gc_projects'
+
+export const GC_PROJECTS_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  name: 'TEXT NOT NULL',
+  description: "TEXT NOT NULL DEFAULT ''",
+  sourceType: "TEXT NOT NULL DEFAULT 'local'",
+  localPath: "TEXT NOT NULL DEFAULT ''",
+  repoUrl: "TEXT NOT NULL DEFAULT ''",
+  defaultBranch: "TEXT NOT NULL DEFAULT ''",
+  currentBranch: "TEXT NOT NULL DEFAULT ''",
+  gitEnabled: 'INTEGER NOT NULL DEFAULT 0',
+  gitAuthType: "TEXT NOT NULL DEFAULT 'none'",
+  artifactRootMode: "TEXT NOT NULL DEFAULT 'external'",
+  artifactRootPath: "TEXT NOT NULL DEFAULT ''",
+  createdAt: 'INTEGER NOT NULL DEFAULT 0',
+  updatedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_ROOM_PROJECTS_TABLE = 'gc_room_projects'
+
+export const GC_ROOM_PROJECTS_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  roomId: 'TEXT NOT NULL',
+  projectId: 'TEXT NOT NULL',
+  isPrimary: 'INTEGER NOT NULL DEFAULT 1',
+  allowRead: 'INTEGER NOT NULL DEFAULT 1',
+  allowWrite: 'INTEGER NOT NULL DEFAULT 0',
+  allowCommit: 'INTEGER NOT NULL DEFAULT 0',
+  allowPush: 'INTEGER NOT NULL DEFAULT 0',
+  pushRequireApproval: 'INTEGER NOT NULL DEFAULT 1',
+  createdAt: 'INTEGER NOT NULL DEFAULT 0',
+  updatedAt: 'INTEGER NOT NULL DEFAULT 0',
+}
+
+export const GC_PROJECT_OPERATION_LOGS_TABLE = 'gc_project_operation_logs'
+
+export const GC_PROJECT_OPERATION_LOGS_SCHEMA: Record<string, string> = {
+  id: 'TEXT PRIMARY KEY',
+  projectId: 'TEXT NOT NULL',
+  roomId: "TEXT NOT NULL DEFAULT ''",
+  operatorType: "TEXT NOT NULL DEFAULT 'user'",
+  operatorName: "TEXT NOT NULL DEFAULT ''",
+  action: 'TEXT NOT NULL',
+  status: "TEXT NOT NULL DEFAULT 'success'",
+  summary: "TEXT NOT NULL DEFAULT ''",
+  payloadJson: "TEXT NOT NULL DEFAULT '{}'",
+  createdAt: 'INTEGER NOT NULL DEFAULT 0',
 }
 
 // ============================================================================
@@ -491,12 +696,54 @@ export function initAllHermesTables(retryCount = 0): void {
       }
     })
 
+    // Structured memory store
+    syncTable(MEMORY_ENTRIES_TABLE, MEMORY_ENTRIES_SCHEMA, {
+      indexes: {
+        idx_memory_entries_profile_scope_section: MEMORY_ENTRIES_SECTION_INDEX,
+        idx_memory_entries_profile_status_updated: MEMORY_ENTRIES_STATUS_INDEX,
+      }
+    })
+
     // Group chat - basic tables
     syncTable(GC_ROOMS_TABLE, GC_ROOMS_SCHEMA)
     syncTable(GC_MESSAGES_TABLE, GC_MESSAGES_SCHEMA)
     syncTable(GC_CONTEXT_SNAPSHOTS_TABLE, GC_CONTEXT_SNAPSHOTS_SCHEMA)
     syncTable(GC_PENDING_SESSION_DELETES_TABLE, GC_PENDING_SESSION_DELETES_SCHEMA)
     syncTable(GC_SESSION_PROFILES_TABLE, GC_SESSION_PROFILES_SCHEMA)
+    syncTable(GC_PRESET_ROOM_TOMBSTONES_TABLE, GC_PRESET_ROOM_TOMBSTONES_SCHEMA)
+    syncTable(GC_WORKFLOW_RUNS_TABLE, GC_WORKFLOW_RUNS_SCHEMA)
+    syncTable(GC_WORKFLOW_NODE_RUNS_TABLE, GC_WORKFLOW_NODE_RUNS_SCHEMA, {
+      indexes: {
+        idx_gc_workflow_node_runs_room: 'CREATE INDEX idx_gc_workflow_node_runs_room ON gc_workflow_node_runs(roomId, nodeId)',
+      }
+    })
+    syncTable(GC_WORKFLOW_ARTIFACTS_TABLE, GC_WORKFLOW_ARTIFACTS_SCHEMA, {
+      indexes: {
+        idx_gc_workflow_artifacts_room: 'CREATE INDEX idx_gc_workflow_artifacts_room ON gc_workflow_artifacts(roomId, nodeId)',
+      }
+    })
+    syncTable(GC_WORKFLOW_RUN_HISTORY_TABLE, GC_WORKFLOW_RUN_HISTORY_SCHEMA, {
+      indexes: {
+        idx_gc_workflow_run_history_room: 'CREATE INDEX idx_gc_workflow_run_history_room ON gc_workflow_run_history(roomId, runNumber)',
+      }
+    })
+    syncTable(GC_PROJECTS_TABLE, GC_PROJECTS_SCHEMA, {
+      indexes: {
+        idx_gc_projects_path: 'CREATE UNIQUE INDEX idx_gc_projects_path ON gc_projects(localPath)',
+      }
+    })
+    syncTable(GC_ROOM_PROJECTS_TABLE, GC_ROOM_PROJECTS_SCHEMA, {
+      indexes: {
+        idx_gc_room_projects_room: 'CREATE INDEX idx_gc_room_projects_room ON gc_room_projects(roomId, isPrimary)',
+        idx_gc_room_projects_project: 'CREATE INDEX idx_gc_room_projects_project ON gc_room_projects(projectId)',
+      }
+    })
+    syncTable(GC_PROJECT_OPERATION_LOGS_TABLE, GC_PROJECT_OPERATION_LOGS_SCHEMA, {
+      indexes: {
+        idx_gc_project_logs_project: 'CREATE INDEX idx_gc_project_logs_project ON gc_project_operation_logs(projectId, createdAt)',
+        idx_gc_project_logs_room: 'CREATE INDEX idx_gc_project_logs_room ON gc_project_operation_logs(roomId, createdAt)',
+      }
+    })
 
     // Group chat - single-column primary key tables (PRIMARY KEY in column definition)
     syncTable(GC_ROOM_AGENTS_TABLE, GC_ROOM_AGENTS_SCHEMA, {

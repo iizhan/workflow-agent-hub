@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Workflow Agent Hub">
+  <defs>
+    <linearGradient id="opc-bg" x1="20" y1="16" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#76c7ff" />
+      <stop offset="0.52" stop-color="#4f90ff" />
+      <stop offset="1" stop-color="#7058ff" />
+    </linearGradient>
+    <linearGradient id="opc-glow" x1="38" y1="32" x2="90" y2="94" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.85" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.18" />
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="28" fill="url(#opc-bg)" />
+  <circle cx="64" cy="64" r="46" fill="#ffffff" opacity="0.14" />
+  <path d="M64 24v10" stroke="#1f2f6d" stroke-width="6" stroke-linecap="round" />
+  <circle cx="64" cy="20" r="7" fill="#ffbf5f" />
+  <rect x="30" y="38" width="68" height="50" rx="20" fill="#eef5ff" />
+  <rect x="34" y="42" width="60" height="18" rx="14" fill="url(#opc-glow)" />
+  <circle cx="24" cy="64" r="8" fill="#3859c7" />
+  <circle cx="104" cy="64" r="8" fill="#3859c7" />
+  <rect x="40" y="54" width="48" height="18" rx="9" fill="#1d3274" />
+  <circle cx="54" cy="63" r="5" fill="#79f2ff" />
+  <circle cx="74" cy="63" r="5" fill="#79f2ff" />
+  <path d="M53 80c4 4 18 4 22 0" stroke="#3152c3" stroke-width="4" stroke-linecap="round" fill="none" />
+  <circle cx="48" cy="79" r="4" fill="#ff8f6b" opacity="0.75" />
+  <circle cx="80" cy="79" r="4" fill="#ff8f6b" opacity="0.75" />
+  <circle cx="94" cy="96" r="16" fill="#ffffff" />
+  <circle cx="94" cy="96" r="13" fill="#ffcf70" />
+  <text x="94" y="101" text-anchor="middle" font-size="17" font-weight="800" font-family="Arial, sans-serif" fill="#263875">WAH</text>
+</svg>

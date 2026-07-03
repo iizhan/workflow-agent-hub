@@ -3,6 +3,7 @@ import { renameSession, setSessionWorkspace, batchDeleteSessions, exportSession 
 import { useChatStore, type Session } from "@/stores/hermes/chat";
 import { useSessionBrowserPrefsStore } from "@/stores/hermes/session-browser-prefs";
 import {
+  NAlert,
   NButton,
   NDropdown,
   NInput,
@@ -13,8 +14,10 @@ import {
 } from "naive-ui";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import { getSourceLabel } from "@/shared/session-display";
 import { copyToClipboard } from "@/utils/clipboard";
+import { useAppStore } from "@/stores/hermes/app";
 import FolderPicker from "./FolderPicker.vue";
 import ChatInput from "./ChatInput.vue";
 import ConversationMonitorPane from "./ConversationMonitorPane.vue";
@@ -23,14 +26,99 @@ import SessionListItem from "./SessionListItem.vue";
 import DrawerPanel from "./DrawerPanel.vue";
 
 const chatStore = useChatStore();
+const appStore = useAppStore();
 const sessionBrowserPrefsStore = useSessionBrowserPrefsStore();
 const message = useMessage();
 const { t } = useI18n();
+const router = useRouter();
 
 const showDrawer = ref(false);
 const drawerActiveTab = ref<"terminal" | "files">("files");
 
 const currentMode = ref<"chat" | "live">("chat");
+const gatewayHealthy = computed(() => appStore.gatewayStatus === "running");
+const activeIssue = computed(() => chatStore.activeSessionIssue);
+const showRecoveryBanner = computed(
+  () => currentMode.value === "chat" && (!!activeIssue.value || !gatewayHealthy.value),
+);
+
+const recoveryBanner = computed(() => {
+  if (activeIssue.value?.kind === "resume_timeout") {
+    return {
+      type: "warning" as const,
+      title: t("chat.recoveryResumeTitle"),
+      body: t("chat.recoveryResumeBody"),
+      primaryLabel: t("chat.recoveryRetry"),
+      primaryAction: () => {
+        if (chatStore.activeSessionId) {
+          chatStore.switchSession(chatStore.activeSessionId);
+        }
+      },
+      secondaryLabel: t("sidebar.openGateways"),
+      secondaryAction: () => router.push({ name: "hermes.gateways" }),
+      dismissible: true,
+    };
+  }
+
+  if (activeIssue.value?.kind === "stream_disconnected") {
+    return {
+      type: "warning" as const,
+      title: t("chat.recoveryStreamTitle"),
+      body: gatewayHealthy.value
+        ? t("chat.recoveryStreamBody")
+        : t("chat.recoveryGatewayBody"),
+      primaryLabel: t("chat.recoveryRefresh"),
+      primaryAction: () => void chatStore.refreshActiveSession(),
+      secondaryLabel: gatewayHealthy.value ? t("sidebar.openSettings") : t("sidebar.openGateways"),
+      secondaryAction: () =>
+        router.push({ name: gatewayHealthy.value ? "hermes.settings" : "hermes.gateways" }),
+      dismissible: true,
+    };
+  }
+
+  if (activeIssue.value?.kind === "run_failed") {
+    return {
+      type: "error" as const,
+      title: t("chat.recoveryRunFailedTitle"),
+      body: activeIssue.value.message
+        ? t("chat.recoveryRunFailedBodyWithReason", { reason: activeIssue.value.message })
+        : t("chat.recoveryRunFailedBody"),
+      primaryLabel: t("chat.recoveryNewChat"),
+      primaryAction: () => chatStore.newChat(),
+      secondaryLabel: t("sidebar.openSettings"),
+      secondaryAction: () => router.push({ name: "hermes.settings" }),
+      dismissible: true,
+    };
+  }
+
+  if (activeIssue.value?.kind === "empty_output") {
+    return {
+      type: "warning" as const,
+      title: t("chat.recoveryEmptyTitle"),
+      body: t("chat.recoveryEmptyBody"),
+      primaryLabel: t("chat.recoveryNewChat"),
+      primaryAction: () => chatStore.newChat(),
+      secondaryLabel: t("sidebar.openSettings"),
+      secondaryAction: () => router.push({ name: "hermes.settings" }),
+      dismissible: true,
+    };
+  }
+
+  if (!gatewayHealthy.value) {
+    return {
+      type: "warning" as const,
+      title: t("chat.recoveryGatewayTitle"),
+      body: t("chat.recoveryGatewayBody"),
+      primaryLabel: t("sidebar.openGateways"),
+      primaryAction: () => router.push({ name: "hermes.gateways" }),
+      secondaryLabel: t("sidebar.openSettings"),
+      secondaryAction: () => router.push({ name: "hermes.settings" }),
+      dismissible: false,
+    };
+  }
+
+  return null;
+});
 
 // Batch selection mode
 const isBatchMode = ref(false);
@@ -206,6 +294,15 @@ const activeSessionSource = computed(() =>
 
 function handleNewChat() {
   chatStore.newChat();
+}
+
+function openWorkspaceDrawer() {
+  drawerActiveTab.value = "files";
+  showDrawer.value = true;
+}
+
+function dismissRecoveryBanner() {
+  chatStore.dismissActiveSessionIssue();
 }
 
 async function copySessionId(id?: string) {
@@ -786,6 +883,30 @@ async function handleWorkspaceConfirm() {
         </div>
       </header>
 
+      <div v-if="showRecoveryBanner && recoveryBanner" class="chat-recovery-banner">
+        <NAlert
+          :type="recoveryBanner.type"
+          :show-icon="true"
+          :closable="recoveryBanner.dismissible"
+          @close="dismissRecoveryBanner"
+        >
+          <template #header>
+            {{ recoveryBanner.title }}
+          </template>
+          <div class="recovery-banner-body">
+            <p>{{ recoveryBanner.body }}</p>
+            <div class="recovery-banner-actions">
+              <NButton size="small" type="primary" @click="recoveryBanner.primaryAction">
+                {{ recoveryBanner.primaryLabel }}
+              </NButton>
+              <NButton quaternary size="small" @click="recoveryBanner.secondaryAction">
+                {{ recoveryBanner.secondaryLabel }}
+              </NButton>
+            </div>
+          </div>
+        </NAlert>
+      </div>
+
       <template v-if="currentMode === 'chat'">
         <MessageList />
         <ChatInput />
@@ -798,10 +919,10 @@ async function handleWorkspaceConfirm() {
 
     <!-- Floating drawer button -->
     <div class="drawer-button-wrapper">
-      <div class="drawer-button" @click="showDrawer = true">
+      <div class="drawer-button" @click="openWorkspaceDrawer">
         <svg
-          width="20"
-          height="20"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -811,6 +932,7 @@ async function handleWorkspaceConfirm() {
           <line x1="9" y1="3" x2="9" y2="21" />
           <line x1="15" y1="3" x2="15" y2="21" />
         </svg>
+        <span>{{ t("chat.openWorkspace") }}</span>
       </div>
     </div>
 
@@ -1142,6 +1264,40 @@ async function handleWorkspaceConfirm() {
   min-width: 0;
 }
 
+.chat-recovery-banner {
+  padding: 12px 20px 0;
+  flex-shrink: 0;
+
+  :deep(.n-alert) {
+    border-radius: 16px;
+  }
+
+  :deep(.n-alert-body__content) {
+    width: 100%;
+  }
+}
+
+.recovery-banner-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  p {
+    margin: 0;
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+}
+
+.recovery-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .chat-header {
   display: flex;
   align-items: center;
@@ -1198,6 +1354,19 @@ async function handleWorkspaceConfirm() {
   .chat-header {
     padding: 16px 12px 16px 52px;
   }
+
+  .chat-recovery-banner {
+    padding: 10px 12px 0;
+  }
+
+  .recovery-banner-body {
+    flex-direction: column;
+  }
+
+  .recovery-banner-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 
 .workspace-badge {
@@ -1221,41 +1390,37 @@ async function handleWorkspaceConfirm() {
   top: 50%;
   transform: translateY(-50%);
   z-index: 100;
-  background: $bg-card;
-  border-radius: 50%;
-  box-shadow:
-    0 0 10px rgba(255, 107, 107, 0.4),
-    0 0 20px rgba(255, 107, 107, 0.2);
-  animation: rainbow-glow 8s linear infinite;
-  transition: all $transition-fast;
-
-  &:hover {
-    animation-play-state: paused;
-    box-shadow:
-      0 0 15px rgba(255, 107, 107, 0.6),
-      0 0 30px rgba(255, 107, 107, 0.3);
-  }
 }
 
 .drawer-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(var(--accent-primary-rgb), 0.1);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.14);
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
   cursor: pointer;
   transition: all $transition-fast;
 
   svg {
-    width: 18px;
-    height: 18px;
     color: var(--accent-primary);
   }
 
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    color: $text-primary;
+    white-space: nowrap;
+  }
+
   &:hover {
-    transform: scale(1.1);
+    transform: translateY(-1px);
+    background: rgba(var(--accent-primary-rgb), 0.12);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
   }
 }
 

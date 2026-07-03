@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { setApiKey, hasApiKey } from "@/api/client";
 import { fetchAuthStatus, loginWithPassword } from "@/api/auth";
+import LanguageSwitch from "@/components/layout/LanguageSwitch.vue";
+import { BRAND_FULL_NAME, BRAND_LOGO_PATH, BRAND_LOGIN_COPY } from "@/constants/branding";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -16,14 +18,16 @@ const username = ref("");
 const password = ref("");
 const loading = ref(false);
 const errorMsg = ref("");
+const successMsg = ref("");
 
 // Login method: 'token' or 'password'
 const loginMethod = ref<"token" | "password">("token");
 const hasPasswordLogin = ref(false);
+const autoTokenAttempted = ref(false);
 
 // If already has a key, try to go to main page
 if (hasApiKey()) {
-  router.replace("/hermes/chat");
+  router.replace({ name: "workbench.overview" });
 }
 
 onMounted(async () => {
@@ -35,6 +39,11 @@ onMounted(async () => {
     }
   } catch {
     // Fallback to token-only
+  } finally {
+    if (urlToken && !hasApiKey() && !autoTokenAttempted.value) {
+      autoTokenAttempted.value = true;
+      await handleTokenLogin();
+    }
   }
 });
 
@@ -55,6 +64,7 @@ async function handleTokenLogin() {
 
   loading.value = true;
   errorMsg.value = "";
+  successMsg.value = "";
 
   try {
     const res = await fetch("/api/hermes/sessions", {
@@ -74,7 +84,8 @@ async function handleTokenLogin() {
     }
 
     setApiKey(key);
-    router.replace("/hermes/chat");
+    successMsg.value = t("login.tokenSuccess");
+    router.replace({ name: "workbench.overview" });
   } catch {
     errorMsg.value = t("login.connectionFailed");
   } finally {
@@ -94,7 +105,7 @@ async function handlePasswordLogin() {
   try {
     const sessionToken = await loginWithPassword(username.value.trim(), password.value);
     setApiKey(sessionToken);
-    router.replace("/hermes/chat");
+    router.replace({ name: "workbench.overview" });
   } catch (err: any) {
     if (err.status === 429 || err.status === 503) {
       errorMsg.value = t("login.tooManyAttempts");
@@ -110,11 +121,23 @@ async function handlePasswordLogin() {
 <template>
   <div class="login-view">
     <div class="login-card">
+      <div class="login-language-switch">
+        <LanguageSwitch size="small" />
+      </div>
       <div class="login-logo">
-        <img src="/logo.png" alt="Hermes" width="80" height="80" />
+        <img :src="BRAND_LOGO_PATH" :alt="BRAND_FULL_NAME" width="80" height="80" />
       </div>
       <h1 class="login-title">{{ t("login.title") }}</h1>
+      <p class="login-brandline">{{ t("brand.tagline") }}</p>
       <p class="login-desc">{{ t("login.description") }}</p>
+      <div v-if="loginMethod === 'token'" class="token-hint-card">
+        <div class="token-hint-title">{{ t("login.tokenHintTitle") }}</div>
+        <p class="token-hint-body">{{ t("login.tokenHintBody") }}</p>
+        <div class="token-hint-command">
+          <span>{{ t("login.tokenHintCommand") }}</span>
+          <code>{{ BRAND_LOGIN_COPY.tokenHintCommand }}</code>
+        </div>
+      </div>
 
       <!-- Method toggle -->
       <div v-if="hasPasswordLogin" class="login-method-toggle">
@@ -161,8 +184,9 @@ async function handlePasswordLogin() {
         </template>
 
         <div v-if="errorMsg" class="login-error">{{ errorMsg }}</div>
+        <div v-else-if="successMsg" class="login-success">{{ successMsg }}</div>
         <button type="submit" class="login-btn" :disabled="loading">
-          {{ loading ? "..." : t("login.submit") }}
+          {{ loading ? t("login.tokenSubmitting") : t("login.submit") }}
         </button>
       </form>
     </div>
@@ -181,6 +205,7 @@ async function handlePasswordLogin() {
 }
 
 .login-card {
+  position: relative;
   width: 480px;
   max-width: calc(100vw - 32px);
   padding: 56px;
@@ -192,6 +217,12 @@ async function handlePasswordLogin() {
   @media (max-width: $breakpoint-mobile) {
     padding: 32px 24px;
   }
+}
+
+.login-language-switch {
+  position: absolute;
+  top: 18px;
+  right: 18px;
 }
 
 .login-logo {
@@ -208,8 +239,57 @@ async function handlePasswordLogin() {
 .login-desc {
   font-size: 14px;
   color: $text-muted;
-  margin: 0 0 32px;
+  margin: 0 0 20px;
   line-height: 1.6;
+}
+
+.login-brandline {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--accent-primary-rgb), 0.9);
+}
+
+.token-hint-card {
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border-radius: $radius-md;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.14);
+  background: rgba(var(--accent-primary-rgb), 0.06);
+  text-align: left;
+}
+
+.token-hint-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.token-hint-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: $text-secondary;
+}
+
+.token-hint-command {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: $text-muted;
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+    color: $text-primary;
+  }
 }
 
 .login-method-toggle {
@@ -271,6 +351,12 @@ async function handlePasswordLogin() {
 .login-error {
   font-size: 13px;
   color: $error;
+  text-align: left;
+}
+
+.login-success {
+  font-size: 13px;
+  color: $success;
   text-align: left;
 }
 

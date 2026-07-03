@@ -19,6 +19,7 @@ packages/server/data/
 packages/server/node_modules/
 .hermes-web-ui/
 hermes_data/
+.runtime/
 hermes-dependencies.md
 # Editor directories and files
 .vscode/*

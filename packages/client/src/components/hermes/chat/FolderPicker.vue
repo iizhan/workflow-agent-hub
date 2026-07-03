@@ -180,10 +180,10 @@ const flatNodes = computed<FlatNode[]>(() => {
 .folder-picker {
   max-height: 360px;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(20, 20, 20, 0.08);
+  border-radius: 14px;
+  padding: 10px;
+  background: #f9f8f4;
 }
 
 .folder-picker-loading {
@@ -199,19 +199,21 @@ const flatNodes = computed<FlatNode[]>(() => {
 .folder-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(31, 111, 139, 0.05);
+    border-color: rgba(31, 111, 139, 0.12);
   }
 
   &.selected {
-    background: rgba(64, 158, 255, 0.15);
-    outline: 1px solid rgba(64, 158, 255, 0.4);
+    background: rgba(31, 111, 139, 0.1);
+    border-color: rgba(31, 111, 139, 0.3);
   }
 
   &.root {
@@ -231,17 +233,19 @@ const flatNodes = computed<FlatNode[]>(() => {
   text-align: center;
   flex-shrink: 0;
   user-select: none;
-  opacity: 0.6;
+  opacity: 0.65;
 }
 
 .folder-icon {
   flex-shrink: 0;
+  opacity: 0.8;
 }
 
 .folder-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #141414;
 }
 
 .folder-empty-text {
@@ -253,14 +257,15 @@ const flatNodes = computed<FlatNode[]>(() => {
 .folder-empty {
   text-align: center;
   padding: 16px;
-  opacity: 0.5;
+  color: #697177;
 }
 
 .folder-selected {
   margin-top: 8px;
-  padding: 6px 8px;
-  background: rgba(64, 158, 255, 0.08);
-  border-radius: 4px;
+  padding: 10px 12px;
+  background: rgba(31, 111, 139, 0.08);
+  border: 1px solid rgba(31, 111, 139, 0.14);
+  border-radius: 10px;
   font-size: 12px;
   display: flex;
   gap: 4px;

@@ -20,12 +20,15 @@ import {
   createSession,
   addMessage,
   addMessages,
+  updateSession,
   updateSessionStats,
   useLocalSessionStore,
 } from '../../db/hermes/session-store'
 import { getDb } from '../../db/index'
 import { getSessionDetailFromDb } from '../../db/hermes/sessions-db'
 import { getModelContextLength } from './model-context'
+import { buildMemoryInstructionBlock } from './memory-store'
+import { rememberUserMessageMemories } from './memory-extractor'
 import { ChatContextCompressor, countTokens, SUMMARY_PREFIX } from '../../lib/context-compressor'
 import { getCompressionSnapshot } from '../../db/hermes/compression-snapshot'
 import { parseLLMJSON, parseToolArguments, parseAnthropicContentArray } from '../../lib/llm-json'
@@ -476,6 +479,7 @@ export class ChatRunSocket {
     skipUserMessage = false,
   ) {
     const { input, session_id, model, instructions } = data
+    const socketUserId = String(socket.handshake.auth?.userId || socket.handshake.query?.userId || '').trim() || undefined
     const upstream = this.gatewayManager.getUpstream(profile).replace(/\/$/, '')
     const apiKey = this.gatewayManager.getApiKey(profile) || undefined
 
@@ -485,6 +489,7 @@ export class ChatRunSocket {
       : undefined
 
     const now = Math.floor(Date.now() / 1000)
+    const previewText = extractTextForPreview(input)
     // Mark working immediately on run start, and append user message
     if (session_id) {
       let state = this.sessionMap.get(session_id)
@@ -512,9 +517,10 @@ export class ChatRunSocket {
 
         // Create session in local DB if it doesn't exist
         if (!getSession(session_id)) {
-          const previewText = extractTextForPreview(input)
           const preview = previewText.replace(/[\r\n]/g, ' ').substring(0, 100)
-          createSession({ id: session_id, profile, model, title: preview })
+          createSession({ id: session_id, profile, model, title: preview, userId: socketUserId })
+        } else if (socketUserId && !getSession(session_id)?.user_id) {
+          updateSession(session_id, { user_id: socketUserId })
         }
 
         // Write user message to local DB immediately
@@ -537,9 +543,10 @@ export class ChatRunSocket {
           timestamp: now,
         })
         if (!getSession(session_id)) {
-          const previewText = extractTextForPreview(input)
           const preview = previewText.replace(/[\r\n]/g, ' ').substring(0, 100)
-          createSession({ id: session_id, profile, model, title: preview })
+          createSession({ id: session_id, profile, model, title: preview, userId: socketUserId })
+        } else if (socketUserId && !getSession(session_id)?.user_id) {
+          updateSession(session_id, { user_id: socketUserId })
         }
         addMessage({
           session_id,
@@ -550,6 +557,21 @@ export class ChatRunSocket {
       }
 
       socket.join(`session:${session_id}`)
+    }
+
+    const sessionUserId = session_id ? getSession(session_id)?.user_id || undefined : undefined
+    const memoryContext = {
+      profileName: profile,
+      sessionId: session_id,
+      userId: socketUserId || sessionUserId,
+    }
+
+    if (previewText.trim()) {
+      try {
+        await rememberUserMessageMemories(previewText, memoryContext)
+      } catch (err) {
+        logger.warn(err, '[chat-run-socket] failed to auto-write memory for profile %s', profile)
+      }
     }
 
     // Emit helper: tag every payload with session_id
@@ -566,11 +588,12 @@ export class ChatRunSocket {
       const body: Record<string, any> = { input }
       if (hermesSessionId) body.session_id = hermesSessionId
       if (model) body.model = model
-      if (instructions) {
-        body.instructions = `${getSystemPrompt()}\n${instructions}`
-      } else {
-        body.instructions = getSystemPrompt()
-      }
+      const memoryInstructionBlock = await buildMemoryInstructionBlock(previewText, memoryContext)
+      body.instructions = [
+        getSystemPrompt(),
+        memoryInstructionBlock,
+        instructions,
+      ].filter(Boolean).join('\n\n')
       // Inject workspace context if set for this session
       if (session_id) {
         const sessionRow = getSession(session_id)

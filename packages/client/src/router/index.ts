@@ -11,6 +11,41 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/workbench/overview',
+      name: 'workbench.overview',
+      component: () => import('@/views/workbench/OverviewView.vue'),
+    },
+    {
+      path: '/workbench/applications',
+      name: 'workbench.applications',
+      component: () => import('@/views/workbench/ApplicationsView.vue'),
+    },
+    {
+      path: '/workbench/applications/new',
+      name: 'workbench.applicationCreate',
+      component: () => import('@/views/workbench/ApplicationCreateView.vue'),
+    },
+    {
+      path: '/workbench/applications/:applicationId',
+      name: 'workbench.applicationDetail',
+      component: () => import('@/views/workbench/ApplicationDetailView.vue'),
+    },
+    {
+      path: '/workbench/runs',
+      name: 'workbench.runs',
+      component: () => import('@/views/workbench/RunsView.vue'),
+    },
+    {
+      path: '/workbench/resources',
+      name: 'workbench.resources',
+      component: () => import('@/views/workbench/ResourcesView.vue'),
+    },
+    {
+      path: '/workbench/system',
+      name: 'workbench.system',
+      component: () => import('@/views/workbench/SystemView.vue'),
+    },
+    {
       path: '/hermes/chat',
       name: 'hermes.chat',
       component: () => import('@/views/hermes/ChatView.vue'),
@@ -98,7 +133,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.public) {
     // Already has key, skip login
     if (to.name === 'login' && hasApiKey()) {
-      next({ path: '/hermes/chat' })
+      next({ name: 'workbench.overview' })
       return
     }
     next()

@@ -1,30 +1,28 @@
 <p align="center">
-  <strong>Hermes Web UI</strong>
+  <strong>Workflow Agent Hub</strong>
   <a href="./README_zh.md">中文</a>
 </p>
 
 <p align="center">
-  A full-featured web dashboard for <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>.<br/>
-  Manage AI chat sessions, monitor usage & costs, configure platform channels,<br/>
-  schedule cron jobs, browse skills — all from a clean, responsive web interface.
+  A multi-agent orchestration workspace for real execution flows.<br/>
+  Manage applications, workflows, AI chat sessions, platform channels,<br/>
+  scheduled jobs, skills, and runtime operations from one responsive interface.
 </p>
 
 <p align="center">
-  <code>npm install -g hermes-web-ui && hermes-web-ui start</code>
+  <code>git clone https://gitee.com/keyDemo/workflow-agent-hub.git</code>
 </p>
 
 <p align="center">
-  <img src="https://github.com/EKKOLearnAI/hermes-web-ui/blob/main/packages/client/src/assets/image1.png" alt="Hermes Web UI Demo" width="680"/>
+  <img src="./packages/client/src/assets/image1.png" alt="Workflow Agent Hub Demo" width="680"/>
 </p>
 
 <p align="center">
-  <img src="https://github.com/EKKOLearnAI/hermes-web-ui/blob/main/packages/client/src/assets/image2.png" alt="Hermes Web UI Demo" width="680"/>
+  <img src="./packages/client/src/assets/image2.png" alt="Workflow Agent Hub Demo" width="680"/>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/hermes-web-ui"><img src="https://img.shields.io/npm/v/hermes-web-ui?style=flat-square&color=blue" alt="npm version"/></a>
-  <a href="https://github.com/EKKOLearnAI/hermes-web-ui/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/hermes-web-ui?style=flat-square" alt="license"/></a>
-  <a href="https://github.com/EKKOLearnAI/hermes-web-ui/stargazers"><img src="https://img.shields.io/github/stars/EKKOLearnAI/hermes-web-ui?style=flat-square" alt="stars"/></a>
+  <a href="https://gitee.com/keyDemo/workflow-agent-hub">Repository on Gitee</a>
 </p>
 
 ---
@@ -35,7 +33,7 @@
 
 - Real-time streaming via SSE with async run support
 - Multi-session management — create, rename, delete, switch between sessions
-- **Self-built session database** — local SQLite storage with automatic sync from Hermes state.db on first startup
+- **Self-built session database** — local SQLite storage with automatic sync from the runtime state.db on first startup
 - Session grouping by source (Telegram, Discord, Slack, etc.) with collapsible accordion
 - Active session indicator — live sessions pin to top with spinner icon
 - Sessions sorted by latest message time
@@ -92,7 +90,7 @@ Unified configuration for **8 platforms** in one page:
 
 ### Multi-Profile & Gateway
 
-- Create, rename, delete, and switch between Hermes profiles
+- Create, rename, delete, and switch between runtime profiles
 - Clone existing profile or import from archive (`.tar.gz`)
 - Export profile for backup or sharing
 - Multi-gateway management — start, stop, and monitor gateway per profile
@@ -159,46 +157,43 @@ Unified configuration for **8 platforms** in one page:
 ### npm (Recommended)
 
 ```bash
-npm install -g hermes-web-ui
-hermes-web-ui start
+git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+cd workflow-agent-hub
+pnpm install
+pnpm dev
 ```
 
 Open **http://localhost:8648**
 
 ### One-line Setup (Auto-detect OS)
 
-Automatically installs Node.js (if missing) and hermes-web-ui on Debian/Ubuntu/macOS:
+Automatically installs Node.js (if missing) and bootstraps Workflow Agent Hub on Debian/Ubuntu/macOS:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/EKKOLearnAI/hermes-web-ui/main/scripts/setup.sh)
+bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
 ```
 
 ### WSL
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/EKKOLearnAI/hermes-web-ui/main/scripts/setup.sh)
-hermes-web-ui start
+bash <(curl -fsSL https://gitee.com/keyDemo/workflow-agent-hub/raw/main/scripts/setup.sh)
+pnpm dev
 ```
 
 > WSL auto-detects and uses `hermes gateway run` for background startup (no launchd/systemd).
 
 ### Docker Compose
 
-Run Web UI together with Hermes Agent:
+Run the workspace together with the runtime agent service:
 
 ```bash
-# Use pre-built image (Recommended)
-WEBUI_IMAGE=ekkoye8888/hermes-web-ui:latest docker compose up -d hermes-agent hermes-webui
-
-# Or build from source
 docker compose up -d --build hermes-agent hermes-webui
-
 docker compose logs -f hermes-webui
 ```
 
 Open **http://localhost:6060**
 
-- Persistent Hermes data is stored in `./hermes_data`
+- Persistent runtime data is stored in `./hermes_data`
 - Web UI auth token is stored in `./hermes_data/hermes-web-ui/.token`
 - On first run with auth enabled, the token is printed to container logs
 - All runtime settings are environment-variable driven in `docker-compose.yml`
@@ -232,33 +227,118 @@ On startup the BFF server automatically:
 
 ## Development
 
+### Local Development & Debugging
+
 ```bash
-git clone https://github.com/EKKOLearnAI/hermes-web-ui.git
-cd hermes-web-ui
+git clone https://gitee.com/keyDemo/workflow-agent-hub.git
+cd workflow-agent-hub
 npm install
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- BFF Server: http://localhost:8648 (proxies to Hermes on 8642)
+`npm run dev` starts two processes:
+
+- Vite frontend: http://localhost:5173/#/hermes/chat
+- BFF server: http://localhost:8648 (detects/starts runtime gateways and proxies to the gateway for the selected profile)
+
+For day-to-day local debugging, open `http://localhost:5173/#/hermes/chat`. Vite proxies local API traffic to the BFF:
+
+- `/api/*`, `/v1/*`, `/health`, `/upload`, `/webhook` → `http://127.0.0.1:8648`
+- `/socket.io` → `http://127.0.0.1:8648` (WebSocket)
+
+Authentication is enabled by default. On first startup, the BFF terminal prints:
+
+```text
+Auth enabled — token: <your-token>
+```
+
+You can also read the local token file:
 
 ```bash
-npm run build   # outputs to dist/
+cat ~/.hermes-web-ui/.token
+```
+
+After you have the token, paste it on the login page or open:
+
+```text
+http://localhost:5173/?token=<your-token>#/hermes/chat
+```
+
+To temporarily disable auth while debugging:
+
+```bash
+AUTH_DISABLED=1 npm run dev
+```
+
+To debug frontend and backend separately:
+
+```bash
+npm run dev:server   # Koa BFF, default http://localhost:8648
+npm run dev:client   # Vite frontend, default http://localhost:5173
+```
+
+Useful checks:
+
+```bash
+npm run build
+npm run test
+```
+
+If port 8648 or 5173 is already in use, stop the older dev process first, or use `PORT=9000 npm run dev:server` for the BFF. If you change the BFF port, also update `BACKEND` in `vite.config.ts`.
+
+### Local Production-like Run
+
+To validate the built app locally:
+
+```bash
+npm run build
+PORT=8648 node dist/server/index.js
+```
+
+Open **http://localhost:8648**. To validate the global CLI daemon flow from this checkout:
+
+```bash
+npm link
+hermes-web-ui start
+hermes-web-ui status
+hermes-web-ui stop
+```
+
+### Repo-Isolated Local Run
+
+When actively developing in this checkout, prefer an isolated Web UI data directory so the repo does not silently reuse `~/.hermes-web-ui` from another daemon or historical run:
+
+```bash
+npm run dev:isolated
+```
+
+For a built local validation, use the same isolation:
+
+```bash
+npm run build
+HERMES_WEBUI_HOME=.runtime/.hermes-web-ui PORT=8648 node dist/server/index.js
+cat .runtime/.hermes-web-ui/.token
+```
+
+The local CLI entry supports the same override:
+
+```bash
+HERMES_WEBUI_HOME=.runtime/.hermes-web-ui node ./bin/hermes-web-ui.mjs start
 ```
 
 ## Architecture
 
 ```
-Browser → BFF (Koa, :8648) → Hermes Gateway (:8642)
+Browser → BFF (Koa, :8648) → Runtime Gateway (:8642)
                 ↓
-           Hermes CLI (sessions, logs, version)
+           Runtime CLI (sessions, logs, version)
                 ↓
            ~/.hermes/config.yaml  (channel behavior)
            ~/.hermes/auth.json    (credential pool)
            Tencent iLink API      (WeChat QR login)
 ```
 
-The frontend is designed with **multi-agent extensibility** — all Hermes-specific code is namespaced under `hermes/` directories (API, components, views, stores), making it straightforward to add new agent integrations alongside.
+The frontend is designed with **multi-agent extensibility** — current runtime-specific code remains namespaced under `hermes/` directories (API, components, views, stores), making it straightforward to add new agent integrations alongside.
 
 The BFF layer handles API proxy (with path rewriting), SSE streaming, file upload and download (multi-backend: local/Docker/SSH/Singularity), session CRUD via CLI, config/credential management, WeChat QR login, model discovery, skills/memory management, log reading, and static file serving.
 
@@ -270,9 +350,7 @@ The BFF layer handles API proxy (with path rewriting), SSE streaming, file uploa
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=EKKOLearnAI/hermes-web-ui&type=Date)](https://star-history.com/#EKKOLearnAI/hermes-web-ui&Date)
-
-<!-- If the chart above doesn't load, visit https://star-history.com/#EKKOLearnAI/hermes-web-ui -->
+Repository: https://gitee.com/keyDemo/workflow-agent-hub
 
 ## Sponsor
 

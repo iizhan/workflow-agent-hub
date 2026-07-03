@@ -1,14 +1,16 @@
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
-import { homedir } from 'os'
+import { getWebUiHome, hasConfiguredWebUiHome } from '../utils/webui-home'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
 // In WSL, always use home directory to avoid cross-filesystem issues
-const DB_DIR = isDev
-  ? resolve(process.cwd(), 'packages/server/data')
-  : resolve(homedir(), '.hermes-web-ui')
+const DB_DIR = hasConfiguredWebUiHome()
+  ? getWebUiHome()
+  : isDev
+    ? resolve(process.cwd(), 'packages/server/data')
+    : getWebUiHome()
 const DB_PATH = resolve(DB_DIR, 'hermes-web-ui.db')
 const JSON_PATH = resolve(DB_DIR, 'hermes-web-ui.json')
 

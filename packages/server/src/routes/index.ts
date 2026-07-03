@@ -29,6 +29,7 @@ import { kanbanRoutes } from './hermes/kanban'
 import { ttsRoutes } from './hermes/tts'
 import { proxyRoutes, proxyMiddleware } from './hermes/proxy'
 import { groupChatRoutes, setGroupChatServer } from './hermes/group-chat'
+import { projectRoutes } from './hermes/projects'
 
 /**
  * Register all routes on the Koa app.
@@ -62,6 +63,7 @@ export function registerRoutes(app: any, requireAuth: (ctx: Context, next: Next)
   app.use(gatewayRoutes.routes())
   app.use(weixinRoutes.routes())
   app.use(groupChatRoutes.routes())       // Must be before proxy
+  app.use(projectRoutes.routes())         // Must be before proxy
   app.use(fileRoutes.routes())              // Must be before proxy (proxy catch-all matches everything)
   app.use(downloadRoutes.routes())          // Must be before proxy
   app.use(jobRoutes.routes())               // Must be before proxy

@@ -28,6 +28,18 @@ export interface MemoryConfig {
   user_char_limit?: number
 }
 
+export interface MemoryPolicyConfig {
+  fact_ttl_days?: number
+  preference_ttl_days?: number
+  episodic_ttl_days?: number
+  procedure_ttl_days?: number
+  relationship_ttl_days?: number
+  policy_ttl_days?: number
+  search_limit?: number
+  allow_fuzzy_recall?: boolean
+  allow_multi_hop?: boolean
+}
+
 export interface SessionResetConfig {
   mode?: string
   idle_minutes?: number
@@ -47,6 +59,7 @@ export interface AppConfig {
   display?: DisplayConfig
   agent?: AgentConfig
   memory?: MemoryConfig
+  memory_policy?: MemoryPolicyConfig
   session_reset?: SessionResetConfig
   privacy?: PrivacyConfig
   approvals?: ApprovalConfig

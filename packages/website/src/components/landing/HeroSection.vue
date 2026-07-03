@@ -8,7 +8,7 @@ const router = useRouter()
 const copied = ref(false)
 const canvasRef = ref<HTMLCanvasElement>()
 
-const installCmd = 'npm install -g hermes-web-ui'
+const installCmd = 'git clone https://gitee.com/keyDemo/workflow-agent-hub.git'
 
 async function copyCmd() {
   try {
@@ -137,7 +137,7 @@ onMounted(() => {
         </button>
         <a
           class="btn-outline"
-          href="https://github.com/EKKOLearnAI/hermes-web-ui"
+          href="https://gitee.com/keyDemo/workflow-agent-hub"
           target="_blank"
           rel="noopener"
         >

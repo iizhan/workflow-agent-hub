@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Hermes Web UI API",
-    "description": "BFF server API for Hermes Web UI — chat sessions, scheduled jobs, platform channels, model management, skills, memory, logs, file browser, group chat, and terminal.",
+    "title": "Workflow Agent Hub API",
+    "description": "BFF server API for Workflow Agent Hub — chat sessions, scheduled jobs, platform channels, model management, skills, memory, logs, file browser, group chat, and terminal.",
     "version": "0.5.9"
   },
   "servers": [
@@ -34,7 +34,7 @@
     },
     {
       "name": "Files",
-      "description": "Hermes file browser"
+      "description": "Workspace file browser"
     },
     {
       "name": "Gateways",
@@ -62,7 +62,7 @@
     },
     {
       "name": "Profiles",
-      "description": "Hermes profile management"
+      "description": "Runtime profile management"
     },
     {
       "name": "Providers",
@@ -102,7 +102,7 @@
     },
     {
       "name": "Proxy",
-      "description": "Gateway proxy to upstream Hermes API"
+      "description": "Gateway proxy to upstream runtime API"
     },
     {
       "name": "Terminal",
@@ -2918,7 +2918,7 @@
         "tags": [
           "Proxy"
         ],
-        "summary": "Proxy to upstream Hermes API",
+        "summary": "Proxy to upstream runtime API",
         "description": "Forwards unmatched /api/hermes/* requests to upstream Hermes gateway. Supports all upstream endpoints.",
         "operationId": "proxyHermes",
         "responses": {
@@ -2937,7 +2937,7 @@
         "tags": [
           "Proxy"
         ],
-        "summary": "Proxy to upstream Hermes API",
+        "summary": "Proxy to upstream runtime API",
         "description": "Forwards unmatched /api/hermes/* requests to upstream Hermes gateway. Supports all upstream endpoints.",
         "operationId": "proxyHermesPost",
         "responses": {
@@ -2956,7 +2956,7 @@
         "tags": [
           "Proxy"
         ],
-        "summary": "Proxy to upstream Hermes API",
+        "summary": "Proxy to upstream runtime API",
         "description": "Forwards unmatched /api/hermes/* requests to upstream Hermes gateway. Supports all upstream endpoints.",
         "operationId": "proxyHermesPut",
         "responses": {
@@ -2975,7 +2975,7 @@
         "tags": [
           "Proxy"
         ],
-        "summary": "Proxy to upstream Hermes API",
+        "summary": "Proxy to upstream runtime API",
         "description": "Forwards unmatched /api/hermes/* requests to upstream Hermes gateway. Supports all upstream endpoints.",
         "operationId": "proxyHermesDelete",
         "responses": {

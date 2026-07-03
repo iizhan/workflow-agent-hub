@@ -80,6 +80,201 @@ a {
   background: rgba(var(--accent-primary-rgb), 0.3);
 }
 
+.workbench-page {
+  min-height: calc(100 * var(--vh));
+  background: var(--workbench-page-bg);
+}
+
+.workbench-page__hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 24px 12px;
+}
+
+.workbench-page__hero-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.workbench-page__eyebrow,
+.workbench-eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $accent-primary;
+  font-weight: 700;
+}
+
+.workbench-page__title {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1.1;
+  max-width: 820px;
+}
+
+.workbench-page__subtitle {
+  margin-top: 10px;
+  color: $text-secondary;
+  max-width: 760px;
+  line-height: 1.7;
+}
+
+.workbench-page__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workbench-card {
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  background: var(--workbench-card-bg);
+  box-shadow: var(--workbench-shadow-soft);
+}
+
+.workbench-card--soft {
+  background: $bg-card;
+  box-shadow: none;
+}
+
+.workbench-card--hero {
+  background: var(--workbench-hero-bg);
+}
+
+.workbench-card--interactive {
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workbench-card--interactive:hover {
+  border-color: $accent-primary;
+  transform: translateY(-2px);
+  box-shadow: var(--workbench-shadow-hover);
+}
+
+.workbench-panel {
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  background: var(--workbench-card-bg);
+  padding: 20px;
+  box-shadow: var(--workbench-shadow-soft);
+}
+
+.workbench-panel--soft {
+  background: $bg-card;
+}
+
+.workbench-panel--accent {
+  background: linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.08), rgba(var(--accent-primary-rgb), 0.02));
+}
+
+.workbench-soft-block {
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  background: $bg-card-hover;
+}
+
+.workbench-kv-card {
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  background: $bg-card-hover;
+  padding: 14px;
+}
+
+.workbench-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $accent-primary;
+  font-weight: 700;
+}
+
+.workbench-empty-state {
+  border: 1px dashed $border-color;
+  border-radius: $radius-lg;
+  background: $bg-card;
+  padding: 28px;
+  color: $text-secondary;
+}
+
+.workbench-pill,
+.workbench-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.workbench-pill {
+  background: rgba(var(--accent-primary-rgb), 0.1);
+  color: $accent-primary;
+}
+
+.workbench-status-pill {
+  background: $bg-card-hover;
+  color: $text-secondary;
+}
+
+.workbench-status-pill--ready,
+.workbench-status-pill--completed {
+  background: var(--status-ready-bg);
+  color: var(--status-ready-text);
+}
+
+.workbench-status-pill--running {
+  background: var(--status-running-bg);
+  color: var(--status-running-text);
+}
+
+.workbench-status-pill--setup_required,
+.workbench-status-pill--draft,
+.workbench-status-pill--waiting_review {
+  background: var(--status-waiting-bg);
+  color: var(--status-waiting-text);
+}
+
+.workbench-status-pill--waiting_review {
+  background: var(--status-waiting-bg-strong);
+  color: var(--status-waiting-text-strong);
+}
+
+.workbench-status-pill--failed {
+  background: var(--status-failed-bg);
+  color: var(--status-failed-text);
+}
+
+.workbench-stat-card {
+  border: 1px solid var(--workbench-card-border-strong);
+  background: var(--workbench-hero-panel-bg);
+  border-radius: $radius-lg;
+  padding: 14px 16px;
+  backdrop-filter: blur(8px);
+}
+
+.workbench-action-primary,
+.workbench-action-secondary {
+  border-radius: $radius-md;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  border: 1px solid $border-color;
+}
+
+.workbench-action-primary {
+  background: $accent-primary;
+  border-color: $accent-primary;
+  color: $text-on-accent;
+}
+
+.workbench-action-secondary {
+  background: $bg-card;
+  color: $text-primary;
+}
+
 // Shared page header
 .page-header {
   display: flex;
@@ -130,6 +325,10 @@ a {
 
 // Mobile responsive
 @media (max-width: $breakpoint-mobile) {
+  .workbench-page__hero {
+    flex-direction: column;
+  }
+
   .mobile-backdrop {
     display: block;
   }

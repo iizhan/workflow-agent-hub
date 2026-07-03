@@ -10,6 +10,7 @@ import type {
 import { DEFAULT_COMPRESSION_CONFIG } from './types'
 import { GatewaySummarizer } from './gateway-client'
 import { buildAgentInstructions, buildSummarizationSystemPrompt } from './prompt'
+import { buildMemoryInstructionBlock } from '../memory-store'
 import { logger } from '../../../services/logger'
 
 export class ContextEngine {
@@ -81,13 +82,20 @@ export class ContextEngine {
 
         logger.debug(`[ContextEngine] buildContext START — room=${input.roomId}, agent=${input.agentName}, totalMessagesInDb=${allMessages.length}, afterFilter=${total}`)
 
-        const instructions = buildAgentInstructions({
+        const baseInstructions = buildAgentInstructions({
             agentName: input.agentName,
             roomName: input.roomName,
             agentDescription: input.agentDescription,
             memberNames: input.memberNames,
             members: input.members,
         })
+        const memoryInstructions = await buildMemoryInstructionBlock(input.currentMessage.content, {
+            profileName: input.profile,
+            roomId: input.roomId,
+            userId: input.currentMessage.senderId,
+            agentId: input.agentId,
+        })
+        const instructions = [memoryInstructions, baseInstructions].filter(Boolean).join('\n\n')
 
         const meta: CompressedContext['meta'] = {
             totalMessages: total,

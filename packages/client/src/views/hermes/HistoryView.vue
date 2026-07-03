@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChatStore, type Session } from '@/stores/hermes/chat'
 import { useAppStore } from '@/stores/hermes/app'
 import { useProfilesStore } from '@/stores/hermes/profiles'
@@ -18,9 +19,11 @@ const appStore = useAppStore()
 const profilesStore = useProfilesStore()
 const sessionBrowserPrefsStore = useSessionBrowserPrefsStore()
 const message = useMessage()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
+const archiveShellRef = ref<HTMLDivElement | null>(null)
 
-// Hermes history sessions (exclude api_server)
+// Runtime history sessions (exclude api_server)
 const hermesSessions = ref<SessionSummary[]>([])
 const hermesSessionsLoading = ref(false)
 const hermesSessionsLoaded = ref(false)
@@ -263,6 +266,102 @@ const activeSessionSource = computed(() =>
   historySession.value?.source || '',
 )
 
+const archiveStats = computed(() => ({
+  sessions: hermesSessions.value.length,
+  sources: groupedSessions.value.length,
+  pinned: pinnedSessions.value.length,
+}))
+
+const sessionsWithWorkspace = computed(() =>
+  hermesSessions.value.filter(session => Boolean(session.workspace)).length,
+)
+
+const selectedSourceLabel = computed(() =>
+  historySession.value?.source ? getSourceLabel(historySession.value.source) : t('chat.historySummaryNone'),
+)
+
+const cliSession = computed(() =>
+  hermesSessions.value.find(session => session.source === 'cli') || null,
+)
+
+type HistoryPrimaryAction = 'focus-archive' | 'open-chat'
+
+const primaryDecision = computed(() => {
+  if (historySession.value) {
+    return {
+      action: 'focus-archive' as HistoryPrimaryAction,
+      tone: 'accent' as const,
+      eyebrow: t('chat.historyPrimaryDecisionSelectedEyebrow'),
+      title: t('chat.historyPrimaryDecisionSelectedTitle', { title: activeSessionTitle.value }),
+      body: t('chat.historyPrimaryDecisionSelectedBody', {
+        source: selectedSourceLabel.value,
+        updated: formatSessionTime(historySession.value.updatedAt),
+      }),
+      actionLabel: t('chat.historyFocusArchive'),
+    }
+  }
+
+  if (cliSession.value) {
+    return {
+      action: 'focus-archive' as HistoryPrimaryAction,
+      tone: 'default' as const,
+      eyebrow: t('chat.historyPrimaryDecisionCliEyebrow'),
+      title: t('chat.historyPrimaryDecisionCliTitle'),
+      body: t('chat.historyPrimaryDecisionCliBody'),
+      actionLabel: t('chat.historyFocusArchive'),
+    }
+  }
+
+  if (hermesSessions.value.length > 0) {
+    return {
+      action: 'focus-archive' as HistoryPrimaryAction,
+      tone: 'calm' as const,
+      eyebrow: t('chat.historyPrimaryDecisionArchiveEyebrow'),
+      title: t('chat.historyPrimaryDecisionArchiveTitle'),
+      body: t('chat.historyPrimaryDecisionArchiveBody'),
+      actionLabel: t('chat.historyFocusArchive'),
+    }
+  }
+
+  return {
+    action: 'open-chat' as HistoryPrimaryAction,
+    tone: 'calm' as const,
+    eyebrow: t('chat.historyPrimaryDecisionEmptyEyebrow'),
+    title: t('chat.historyPrimaryDecisionEmptyTitle'),
+    body: t('chat.historyPrimaryDecisionEmptyBody'),
+    actionLabel: t('chat.historyOpenChat'),
+  }
+})
+
+const decisionChecklist = computed(() => [
+  { key: 'sessions', label: t('chat.historyChecklistSessions'), count: archiveStats.value.sessions },
+  { key: 'sources', label: t('chat.historyChecklistSources'), count: archiveStats.value.sources },
+  { key: 'pinned', label: t('chat.historyChecklistPinned'), count: archiveStats.value.pinned },
+  { key: 'workspace', label: t('chat.historyChecklistWorkspace'), count: sessionsWithWorkspace.value },
+  { key: 'selected', label: t('chat.historyChecklistSelected'), count: historySession.value ? 1 : 0 },
+])
+
+function handlePrimaryDecision() {
+  if (primaryDecision.value.action === 'open-chat') {
+    router.push({ name: 'hermes.chat' })
+    return
+  }
+  archiveShellRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function formatSessionTime(value?: number | null) {
+  if (!value) return t('common.na')
+  return new Date(value).toLocaleString(locale.value, { hour12: false })
+}
+
+const activeSessionSummary = computed(() => {
+  if (!historySession.value) return ''
+  return t('chat.historySelectedMeta', {
+    messages: historySession.value.messageCount || 0,
+    updated: formatSessionTime(historySession.value.updatedAt),
+  })
+})
+
 async function copySessionId(id?: string) {
   const sessionId = id || historySessionId.value
   if (sessionId) {
@@ -398,64 +497,200 @@ async function handleWorkspaceConfirm() {
 </script>
 
 <template>
-  <div class="history-panel">
-    <div class="session-backdrop" :class="{ active: showSessions }" @click="showSessions = false" />
-    <aside class="session-list" :class="{ collapsed: !showSessions }">
-      <div class="session-list-header">
-        <span v-if="showSessions" class="session-list-title">{{ t('chat.hermesHistory') }}</span>
-        <div class="session-list-actions">
-          <button class="session-close-btn" @click="showSessions = false">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+  <div class="history-view workbench-page">
+    <section class="workbench-page__hero">
+      <div class="workbench-page__hero-copy">
+        <div class="workbench-page__eyebrow">{{ t('chat.historyHeroEyebrow') }}</div>
+        <h1 class="workbench-page__title">{{ t('chat.historyHeroTitle') }}</h1>
+        <p class="workbench-page__subtitle">{{ t('chat.historyHeroSubtitle') }}</p>
+      </div>
+      <div class="workbench-page__actions">
+        <NButton secondary @click="router.push({ name: 'workbench.runs' })">
+          {{ t('chat.historyOpenRuns') }}
+        </NButton>
+        <NButton type="primary" @click="router.push({ name: 'hermes.chat' })">
+          {{ t('chat.historyOpenChat') }}
+        </NButton>
+      </div>
+    </section>
+
+    <section class="history-view__decision-grid">
+      <article class="history-guide workbench-panel" :class="`history-guide--${primaryDecision.tone}`">
+        <div class="workbench-section-title">{{ primaryDecision.eyebrow }}</div>
+        <h2 class="history-guide__title">{{ primaryDecision.title }}</h2>
+        <p class="history-guide__body">{{ primaryDecision.body }}</p>
+        <div class="history-guide__points">
+          <div class="history-guide__point">{{ t('chat.historyGuidePoint1') }}</div>
+          <div class="history-guide__point">{{ t('chat.historyGuidePoint2') }}</div>
+          <div class="history-guide__point">{{ t('chat.historyGuidePoint3') }}</div>
+        </div>
+        <div class="history-guide__actions">
+          <NButton type="primary" @click="handlePrimaryDecision()">
+            {{ primaryDecision.actionLabel }}
+          </NButton>
+          <NButton quaternary @click="router.push({ name: 'workbench.applications' })">
+            {{ t('chat.historyOpenApplications') }}
+          </NButton>
+        </div>
+      </article>
+
+      <article class="history-checklist workbench-panel workbench-panel--soft">
+        <div class="workbench-section-title">{{ t('chat.historyChecklistEyebrow') }}</div>
+        <h2 class="history-checklist__title">{{ t('chat.historyChecklistTitle') }}</h2>
+        <p class="history-checklist__body">{{ t('chat.historyChecklistBody') }}</p>
+        <div class="history-checklist__list">
+          <div v-for="item in decisionChecklist" :key="item.key" class="history-checklist__item">
+            <span class="history-checklist__label">{{ item.label }}</span>
+            <span class="history-checklist__count">{{ item.count }}</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="history-view__summary-grid">
+      <article class="history-stat workbench-panel">
+        <div class="history-stat__label">{{ t('chat.historySummarySelectedSource') }}</div>
+        <div class="history-stat__value">{{ selectedSourceLabel }}</div>
+        <div class="history-stat__meta">{{ t('chat.historySummarySelectedSourceMeta') }}</div>
+      </article>
+
+      <article class="history-stat workbench-panel">
+        <div class="history-stat__label">{{ t('chat.historySummarySessions') }}</div>
+        <div class="history-stat__value">{{ archiveStats.sessions }}</div>
+        <div class="history-stat__meta">{{ t('chat.historySummarySessionsMeta') }}</div>
+      </article>
+
+      <article class="history-stat workbench-panel">
+        <div class="history-stat__label">{{ t('chat.historySummaryPinned') }}</div>
+        <div class="history-stat__value">{{ archiveStats.pinned }}</div>
+        <div class="history-stat__meta">{{ t('chat.historySummaryPinnedMeta') }}</div>
+      </article>
+
+      <article class="history-stat workbench-panel">
+        <div class="history-stat__label">{{ t('chat.historySummaryWorkspace') }}</div>
+        <div class="history-stat__value">{{ sessionsWithWorkspace }}</div>
+        <div class="history-stat__meta">{{ t('chat.historySummaryWorkspaceMeta') }}</div>
+      </article>
+    </section>
+
+    <section class="history-view__content">
+      <div ref="archiveShellRef" class="history-shell workbench-panel workbench-panel--soft">
+        <header class="page-header history-shell__header">
+          <div class="history-shell__title-group">
+            <h2 class="header-title">{{ t('chat.historyArchive') }}</h2>
+            <p class="history-shell__subtitle">{{ t('chat.historyPanelSubtitle') }}</p>
+          </div>
+        </header>
+
+        <div class="history-panel">
+          <div class="session-backdrop" :class="{ active: showSessions }" @click="showSessions = false" />
+          <aside class="session-list" :class="{ collapsed: !showSessions }">
+            <div class="session-list-header">
+              <div v-if="showSessions" class="session-list-heading">
+                <span class="session-list-title">{{ t('chat.historyArchive') }}</span>
+                <p class="session-list-subtitle">{{ t('chat.historyArchiveTitle') }}</p>
+              </div>
+              <div class="session-list-actions">
+                <button class="session-close-btn" @click="showSessions = false">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+            <div v-if="showSessions" class="session-scope-note">
+              <div class="session-scope-note__title">{{ t('chat.historyArchiveTitle') }}</div>
+              <p class="session-scope-note__body">{{ t('chat.historyArchiveBody') }}</p>
+              <div class="session-scope-note__stats">
+                <span class="session-scope-chip">{{ t('chat.historyStatSessions', { count: archiveStats.sessions }) }}</span>
+                <span class="session-scope-chip">{{ t('chat.historyStatSources', { count: archiveStats.sources }) }}</span>
+                <span class="session-scope-chip">{{ t('chat.historyStatPinned', { count: archiveStats.pinned }) }}</span>
+              </div>
+            </div>
+            <div v-if="showSessions" class="session-items">
+              <div v-if="hermesSessionsLoading && hermesSessions.length === 0" class="session-loading">{{ t('common.loading') }}</div>
+              <div v-else-if="hermesSessions.length === 0" class="session-empty">
+                <div class="session-empty__title">{{ t('chat.historyArchiveEmptyTitle') }}</div>
+                <p class="session-empty__body">{{ t('chat.historyArchiveEmptyBody') }}</p>
+              </div>
+
+              <template v-if="pinnedSessions.length > 0">
+                <div class="session-group-header session-group-header--static">
+                  <span class="session-group-label">{{ t('chat.pinned') }}</span>
+                  <span class="session-group-count">{{ pinnedSessions.length }}</span>
+                </div>
+                <SessionListItem
+                  v-for="s in pinnedSessions"
+                  :key="`pinned-${s.id}`"
+                  :session="s"
+                  :active="s.id === historySessionId"
+                  :pinned="true"
+                  :can-delete="false"
+                  :streaming="false"
+                  @select="handleSessionClick(s.id)"
+                  @contextmenu="handleContextMenu($event, s.id)"
+                />
+              </template>
+
+              <template v-for="group in groupedSessions" :key="group.source">
+                <div class="session-group-header" @click="toggleGroup(group.source)">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="group-chevron" :class="{ collapsed: collapsedGroups.has(group.source) }"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span class="session-group-label">{{ group.label }}</span>
+                  <span class="session-group-count">{{ group.sessions.length }}</span>
+                </div>
+                <template v-if="!collapsedGroups.has(group.source)">
+                  <SessionListItem
+                    v-for="s in group.sessions"
+                    :key="s.id"
+                    :session="s"
+                    :active="s.id === historySessionId"
+                    :pinned="false"
+                    :can-delete="false"
+                    :streaming="false"
+                    @select="handleSessionClick(s.id)"
+                    @contextmenu="handleContextMenu($event, s.id)"
+                  />
+                </template>
+              </template>
+            </div>
+          </aside>
+
+          <div class="chat-main">
+            <header class="chat-header">
+              <div class="header-left">
+                <NButton quaternary size="small" @click="showSessions = !showSessions" circle>
+                  <template #icon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                  </template>
+                </NButton>
+                <div class="header-copy">
+                  <span class="header-session-title">{{ activeSessionTitle }}</span>
+                  <span v-if="activeSessionSummary" class="header-session-summary">{{ activeSessionSummary }}</span>
+                </div>
+                <span v-if="activeSessionSource" class="source-badge">{{ getSourceLabel(activeSessionSource) }}</span>
+                <span v-if="historySession?.workspace" class="workspace-badge" :title="historySession.workspace">📁 {{ historySession.workspace.split('/').pop() || historySession.workspace }}</span>
+              </div>
+              <div class="header-actions">
+                <NTooltip trigger="hover">
+                  <template #trigger>
+                    <NButton quaternary size="small" @click="copySessionId()" circle>
+                      <template #icon>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </template>
+                    </NButton>
+                  </template>
+                  {{ t('chat.copySessionId') }}
+                </NTooltip>
+              </div>
+            </header>
+
+            <HistoryMessageList
+              :session="historySession"
+              :empty-title="t('chat.historyEmptyViewerTitle')"
+              :empty-body="t('chat.historyEmptyViewerBody')"
+            />
+          </div>
         </div>
       </div>
-      <div v-if="showSessions" class="session-scope-note">
-        {{ t('chat.historyScopeHint') }}
-      </div>
-      <div v-if="showSessions" class="session-items">
-        <div v-if="hermesSessionsLoading && hermesSessions.length === 0" class="session-loading">{{ t('common.loading') }}</div>
-        <div v-else-if="hermesSessions.length === 0" class="session-empty">{{ t('chat.noSessions') }}</div>
-
-        <template v-if="pinnedSessions.length > 0">
-          <div class="session-group-header session-group-header--static">
-            <span class="session-group-label">{{ t('chat.pinned') }}</span>
-            <span class="session-group-count">{{ pinnedSessions.length }}</span>
-          </div>
-          <SessionListItem
-            v-for="s in pinnedSessions"
-            :key="`pinned-${s.id}`"
-            :session="s"
-            :active="s.id === historySessionId"
-            :pinned="true"
-            :can-delete="false"
-            :streaming="false"
-            @select="handleSessionClick(s.id)"
-            @contextmenu="handleContextMenu($event, s.id)"
-          />
-        </template>
-
-        <template v-for="group in groupedSessions" :key="group.source">
-          <div class="session-group-header" @click="toggleGroup(group.source)">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="group-chevron" :class="{ collapsed: collapsedGroups.has(group.source) }"><polyline points="9 18 15 12 9 6"/></svg>
-            <span class="session-group-label">{{ group.label }}</span>
-            <span class="session-group-count">{{ group.sessions.length }}</span>
-          </div>
-          <template v-if="!collapsedGroups.has(group.source)">
-            <SessionListItem
-              v-for="s in group.sessions"
-              :key="s.id"
-              :session="s"
-              :active="s.id === historySessionId"
-              :pinned="false"
-              :can-delete="false"
-              :streaming="false"
-              @select="handleSessionClick(s.id)"
-              @contextmenu="handleContextMenu($event, s.id)"
-            />
-          </template>
-        </template>
-      </div>
-    </aside>
+    </section>
 
     <NDropdown
       placement="bottom-start"
@@ -495,43 +730,133 @@ async function handleWorkspaceConfirm() {
     >
       <FolderPicker v-model="workspaceValue" />
     </NModal>
-
-    <div class="chat-main">
-      <header class="chat-header">
-        <div class="header-left">
-          <NButton quaternary size="small" @click="showSessions = !showSessions" circle>
-            <template #icon>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            </template>
-          </NButton>
-          <span class="header-session-title">{{ activeSessionTitle }}</span>
-          <span v-if="activeSessionSource" class="source-badge">{{ getSourceLabel(activeSessionSource) }}</span>
-          <span v-if="historySession?.workspace" class="workspace-badge" :title="historySession.workspace">📁 {{ historySession.workspace.split('/').pop() || historySession.workspace }}</span>
-        </div>
-        <div class="header-actions">
-          <NTooltip trigger="hover">
-            <template #trigger>
-              <NButton quaternary size="small" @click="copySessionId()" circle>
-                <template #icon>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </template>
-              </NButton>
-            </template>
-            {{ t('chat.copySessionId') }}
-          </NTooltip>
-        </div>
-      </header>
-
-      <HistoryMessageList :session="historySession" />
-    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
 
+.history-view {
+  min-height: calc(100 * var(--vh));
+  display: flex;
+  flex-direction: column;
+}
+
+.history-view__decision-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  padding: 0 24px 16px;
+}
+
+.history-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.history-guide--accent {
+  background:
+    linear-gradient(135deg, rgba(var(--accent-primary-rgb), 0.09), rgba(255, 255, 255, 0.96)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.history-guide__title,
+.history-checklist__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  color: $text-primary;
+}
+
+.history-guide__body,
+.history-checklist__body,
+.history-shell__subtitle {
+  color: $text-secondary;
+  line-height: 1.7;
+}
+
+.history-guide__points,
+.history-checklist__list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-guide__point,
+.history-checklist__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.history-guide__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.history-checklist__label,
+.history-stat__label {
+  color: $text-secondary;
+}
+
+.history-checklist__count,
+.history-stat__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.history-view__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 24px 16px;
+}
+
+.history-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 142px;
+}
+
+.history-stat__meta {
+  color: $text-muted;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.history-view__content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 24px 24px;
+}
+
+.history-shell {
+  padding: 0;
+  overflow: hidden;
+}
+
+.history-shell__header {
+  padding: 18px 20px;
+}
+
+.history-shell__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .history-panel {
   display: flex;
+  min-height: 720px;
   height: 100%;
   position: relative;
 }
@@ -598,6 +923,10 @@ async function handleWorkspaceConfirm() {
   flex-shrink: 0;
 }
 
+.session-list-heading {
+  min-width: 0;
+}
+
 .session-list-actions {
   display: flex;
   align-items: center;
@@ -626,15 +955,52 @@ async function handleWorkspaceConfirm() {
   letter-spacing: 0.5px;
 }
 
+.session-list-subtitle {
+  margin-top: 6px;
+  color: $text-primary;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .session-scope-note {
   margin: 0 12px 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid rgba($accent-primary, 0.16);
   border-radius: $radius-sm;
   background: rgba($accent-primary, 0.06);
+}
+
+.session-scope-note__title {
+  color: $text-primary;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.session-scope-note__body {
+  margin-top: 6px;
   color: $text-secondary;
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.55;
+}
+
+.session-scope-note__stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.session-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: $bg-card;
+  color: $text-primary;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .session-group-header {
@@ -686,6 +1052,17 @@ async function handleWorkspaceConfirm() {
   font-size: 12px;
   color: $text-muted;
   text-align: center;
+}
+
+.session-empty__title {
+  color: $text-primary;
+  font-weight: 700;
+}
+
+.session-empty__body {
+  margin-top: 8px;
+  color: $text-secondary;
+  line-height: 1.55;
 }
 
 :deep(.session-item) {
@@ -836,10 +1213,26 @@ async function handleWorkspaceConfirm() {
   min-width: 0;
 }
 
+.header-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .header-session-title {
   font-size: 16px;
   font-weight: 600;
   color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-session-summary {
+  margin-top: 4px;
+  color: $text-secondary;
+  font-size: 12px;
+  line-height: 1.45;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -864,8 +1257,35 @@ async function handleWorkspaceConfirm() {
 }
 
 @media (max-width: $breakpoint-mobile) {
+  .history-view__decision-grid,
+  .history-view__summary-grid,
+  .history-view__content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .history-shell__header {
+    padding: 16px 12px 12px;
+  }
+
+  .history-checklist__count,
+  .history-stat__value {
+    font-size: 22px;
+  }
+
   .chat-header {
     padding: 16px 12px 16px 52px;
+  }
+
+  .header-session-summary {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 1100px) {
+  .history-view__decision-grid,
+  .history-view__summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 

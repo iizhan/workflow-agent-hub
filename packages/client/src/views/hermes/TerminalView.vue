@@ -7,8 +7,10 @@ import "@xterm/xterm/css/xterm.css";
 import { getApiKey, getBaseUrlValue } from "@/api/client";
 import { NButton, NPopconfirm, NTooltip, NSelect, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import type { ITheme } from "@xterm/xterm";
 
+const router = useRouter();
 const { t } = useI18n();
 const message = useMessage();
 
@@ -230,12 +232,16 @@ interface SessionInfo {
 // ─── State ──────────────────────────────────────────────────────
 
 const terminalRef = ref<HTMLDivElement | null>(null);
+const terminalShellRef = ref<HTMLDivElement | null>(null);
 const showSessions = ref(true);
 const sessions = ref<SessionInfo[]>([]);
 const activeSessionId = ref<string | null>(null);
 const selectedTheme = ref(localStorage.getItem(STORAGE_KEY_THEME) || "default");
+const connectionState = ref<"connecting" | "connected" | "reconnecting" | "closed">("connecting");
 
 let ws: WebSocket | null = null;
+let shouldReconnect = true;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 // Keep all terminal instances alive, only dispose on close
 const termMap = new Map<
   string,
@@ -252,6 +258,14 @@ const activeSession = computed(
   () => sessions.value.find((s) => s.id === activeSessionId.value) || null,
 );
 
+const liveSessions = computed(() =>
+  sessions.value.filter((session) => !session.exited),
+);
+
+const exitedSessions = computed(() =>
+  sessions.value.filter((session) => session.exited),
+);
+
 const themeOptions = computed(() =>
   Object.entries(TERMINAL_THEMES).map(([key, val]) => ({
     label: val.label,
@@ -259,9 +273,71 @@ const themeOptions = computed(() =>
   })),
 );
 
+const selectedThemeLabel = computed(
+  () => TERMINAL_THEMES[selectedTheme.value]?.label ?? selectedTheme.value,
+);
+
 const terminalBg = computed(
   () => TERMINAL_THEMES[selectedTheme.value]?.theme.background ?? "#1a1a2e",
 );
+
+const primaryDecision = computed(() => {
+  if (connectionState.value !== "connected") {
+    return {
+      tone: "warning" as const,
+      eyebrow: t("terminal.primaryDecisionDisconnectedEyebrow"),
+      title: t("terminal.primaryDecisionDisconnectedTitle"),
+      body: t("terminal.primaryDecisionDisconnectedBody"),
+      actionLabel: t("terminal.openLogs"),
+      action: "logs" as const,
+    };
+  }
+
+  if (activeSession.value && !activeSession.value.exited) {
+    return {
+      tone: "accent" as const,
+      eyebrow: t("terminal.primaryDecisionActiveEyebrow"),
+      title: t("terminal.primaryDecisionActiveTitle", { name: activeSession.value.title }),
+      body: t("terminal.primaryDecisionActiveBody", { shell: activeSession.value.shell }),
+      actionLabel: t("terminal.continueInTerminal"),
+      action: "focus" as const,
+    };
+  }
+
+  if (exitedSessions.value.length > 0) {
+    return {
+      tone: "default" as const,
+      eyebrow: t("terminal.primaryDecisionExitedEyebrow"),
+      title: t("terminal.primaryDecisionExitedTitle", { name: exitedSessions.value[0].title }),
+      body: t("terminal.primaryDecisionExitedBody"),
+      actionLabel: t("terminal.createFreshTerminal"),
+      action: "create" as const,
+    };
+  }
+
+  return {
+    tone: "calm" as const,
+    eyebrow: t("terminal.primaryDecisionEmptyEyebrow"),
+    title: t("terminal.primaryDecisionEmptyTitle"),
+    body: t("terminal.primaryDecisionEmptyBody"),
+    actionLabel: t("terminal.newTab"),
+    action: "create" as const,
+  };
+});
+
+const decisionChecklist = computed(() => [
+  { key: "live", label: t("terminal.checklistLive"), count: liveSessions.value.length },
+  { key: "exited", label: t("terminal.checklistExited"), count: exitedSessions.value.length },
+  { key: "sessions", label: t("terminal.checklistSessions"), count: sessions.value.length },
+  { key: "connection", label: t("terminal.checklistConnection"), count: connectionState.value === "connected" ? 1 : 0 },
+]);
+
+const connectionStateLabel = computed(() => {
+  if (connectionState.value === "connected") return t("terminal.connectionConnected");
+  if (connectionState.value === "reconnecting") return t("terminal.connectionReconnecting");
+  if (connectionState.value === "closed") return t("terminal.connectionClosedState");
+  return t("terminal.connectionConnecting");
+});
 
 // ─── WebSocket ──────────────────────────────────────────────────
 
@@ -295,11 +371,16 @@ function buildWsUrl(): string {
 }
 
 function connect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  connectionState.value = shouldReconnect ? "connecting" : "closed";
   const url = buildWsUrl();
   ws = new WebSocket(url);
 
   ws.onopen = () => {
-    // Server auto-creates the first session and sends 'created'
+    connectionState.value = "connected";
   };
 
   ws.onmessage = (event) => {
@@ -313,18 +394,14 @@ function connect() {
     }
   };
 
-  // On reconnect, recreate all terminals for existing sessions
-  ws.onopen = () => {
-    // Server will auto-create the first session again
-  };
-
   ws.onclose = () => {
-    // Reconnect after delay
-    setTimeout(connect, 3000);
+    connectionState.value = shouldReconnect ? "reconnecting" : "closed";
+    if (!shouldReconnect) return;
+    reconnectTimer = setTimeout(connect, 3000);
   };
 
   ws.onerror = () => {
-    // let onclose handle reconnect
+    connectionState.value = "closed";
   };
 }
 
@@ -375,6 +452,10 @@ function handleControl(msg: any) {
 // ─── Session actions ────────────────────────────────────────────
 
 function createSession() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    message.error(t("terminal.connectionFailed"));
+    return;
+  }
   send({ type: "create" });
 }
 
@@ -518,9 +599,22 @@ function handleMobileChange(e: MediaQueryListEvent | MediaQueryList) {
   if (e.matches && showSessions.value) showSessions.value = false;
 }
 
+function handlePrimaryDecision() {
+  if (primaryDecision.value.action === "logs") {
+    router.push({ name: "hermes.logs" });
+    return;
+  }
+  if (primaryDecision.value.action === "create") {
+    createSession();
+    return;
+  }
+  terminalShellRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ─── Lifecycle ──────────────────────────────────────────────────
 
 onMounted(() => {
+  shouldReconnect = true;
   mobileQuery = window.matchMedia("(max-width: 768px)");
   handleMobileChange(mobileQuery);
   mobileQuery.addEventListener("change", handleMobileChange);
@@ -528,6 +622,11 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  shouldReconnect = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   mobileQuery?.removeEventListener("change", handleMobileChange);
   unmountActiveTerminal();
   // Dispose all terminal instances
@@ -543,164 +642,376 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="terminal-panel">
-    <!-- Session backdrop (mobile) -->
-    <div
-      class="session-backdrop"
-      :class="{ active: showSessions }"
-      @click="showSessions = false"
-    />
-
-    <!-- Session list sidebar -->
-    <aside class="session-list" :class="{ collapsed: !showSessions }">
-      <div class="session-list-header">
-        <span v-if="showSessions" class="session-list-title">{{
-          t("terminal.sessions")
-        }}</span>
-        <div class="session-list-actions">
-          <!-- <button class="session-close-btn" @click="showSessions = false">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button> -->
-          <NTooltip trigger="hover">
-            <template #trigger>
-              <NButton quaternary size="tiny" @click="createSession" circle>
-                <template #icon>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </template>
-              </NButton>
-            </template>
-            {{ t("terminal.newTab") }}
-          </NTooltip>
-        </div>
+  <div class="terminal-view workbench-page">
+    <section class="workbench-page__hero">
+      <div class="workbench-page__hero-copy">
+        <div class="workbench-page__eyebrow">{{ t("terminal.heroEyebrow") }}</div>
+        <h1 class="workbench-page__title">{{ t("terminal.heroTitle") }}</h1>
+        <p class="workbench-page__subtitle">{{ t("terminal.heroSubtitle") }}</p>
       </div>
-      <div v-if="showSessions" class="session-items">
-        <div v-if="sessions.length === 0" class="session-empty">
-          {{ t("common.loading") }}
+      <div class="workbench-page__actions">
+        <NButton secondary @click="router.push({ name: 'workbench.runs' })">
+          {{ t("terminal.openRuns") }}
+        </NButton>
+        <NButton type="primary" @click="router.push({ name: 'hermes.logs' })">
+          {{ t("terminal.openLogs") }}
+        </NButton>
+      </div>
+    </section>
+
+    <section class="terminal-view__decision-grid">
+      <article class="terminal-guide workbench-panel" :class="`terminal-guide--${primaryDecision.tone}`">
+        <div class="workbench-section-title">{{ primaryDecision.eyebrow }}</div>
+        <h2 class="terminal-guide__title">{{ primaryDecision.title }}</h2>
+        <p class="terminal-guide__body">{{ primaryDecision.body }}</p>
+        <div class="terminal-guide__points">
+          <div class="terminal-guide__point">{{ t("terminal.guidePoint1") }}</div>
+          <div class="terminal-guide__point">{{ t("terminal.guidePoint2") }}</div>
+          <div class="terminal-guide__point">{{ t("terminal.guidePoint3") }}</div>
         </div>
-        <button
-          v-for="s in sessions"
-          :key="s.id"
-          class="session-item"
-          :class="{ active: s.id === activeSessionId, exited: s.exited }"
-          @click="switchSession(s.id)"
-        >
-          <div class="session-item-content">
-            <span class="session-item-title">{{ s.title }}</span>
-            <span class="session-item-meta">
-              <span class="session-item-shell">{{ s.shell }}</span>
-              <span v-if="s.exited" class="session-item-status">{{
-                t("terminal.sessionExited")
-              }}</span>
-              <span v-else class="session-item-time">{{
-                formatTime(s.createdAt)
-              }}</span>
-            </span>
+        <div class="terminal-guide__actions">
+          <NButton type="primary" @click="handlePrimaryDecision()">
+            {{ primaryDecision.actionLabel }}
+          </NButton>
+          <NButton quaternary @click="router.push({ name: 'workbench.system' })">
+            {{ t("terminal.openSystemControl") }}
+          </NButton>
+        </div>
+      </article>
+
+      <article class="terminal-checklist workbench-panel workbench-panel--soft">
+        <div class="workbench-section-title">{{ t("terminal.checklistEyebrow") }}</div>
+        <h2 class="terminal-checklist__title">{{ t("terminal.checklistTitle") }}</h2>
+        <p class="terminal-checklist__body">{{ t("terminal.checklistBody") }}</p>
+        <div class="terminal-checklist__list">
+          <div v-for="item in decisionChecklist" :key="item.key" class="terminal-checklist__item">
+            <span class="terminal-checklist__label">{{ item.label }}</span>
+            <span class="terminal-checklist__count">{{ item.count }}</span>
           </div>
-          <NPopconfirm
-            v-if="sessions.length > 1"
-            @positive-click="closeSession(s.id)"
-          >
-            <template #trigger>
-              <button class="session-item-delete" @click.stop>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </template>
-            {{ t("terminal.closeSession") }}
-          </NPopconfirm>
-        </button>
-      </div>
-    </aside>
+        </div>
+      </article>
+    </section>
 
-    <!-- Main terminal area -->
-    <div class="terminal-main">
-      <header class="terminal-header">
-        <div class="header-left">
-          <NButton
-            quaternary
-            size="small"
-            @click="showSessions = !showSessions"
-            circle
-          >
-            <template #icon>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-              </svg>
-            </template>
-          </NButton>
-          <span v-if="activeSession" class="header-session-title">{{
-            activeSession.title
-          }}</span>
+    <section class="terminal-view__summary-grid">
+      <article class="terminal-stat workbench-panel">
+        <div class="terminal-stat__label">{{ t("terminal.summaryTotal") }}</div>
+        <div class="terminal-stat__value">{{ sessions.length }}</div>
+        <div class="terminal-stat__meta">{{ t("terminal.summaryTotalMeta") }}</div>
+      </article>
+
+      <article class="terminal-stat workbench-panel">
+        <div class="terminal-stat__label">{{ t("terminal.summaryLive") }}</div>
+        <div class="terminal-stat__value">{{ liveSessions.length }}</div>
+        <div class="terminal-stat__meta">{{ t("terminal.summaryLiveMeta") }}</div>
+      </article>
+
+      <article class="terminal-stat workbench-panel">
+        <div class="terminal-stat__label">{{ t("terminal.summaryConnection") }}</div>
+        <div class="terminal-stat__value">{{ connectionStateLabel }}</div>
+        <div class="terminal-stat__meta">{{ t("terminal.summaryConnectionMeta") }}</div>
+      </article>
+
+      <article class="terminal-stat workbench-panel">
+        <div class="terminal-stat__label">{{ t("terminal.summarySelected") }}</div>
+        <div class="terminal-stat__value">{{ activeSession?.shell || t("terminal.noSelectionShort") }}</div>
+        <div class="terminal-stat__meta">
+          {{
+            activeSession
+              ? t("terminal.selectedMeta", {
+                theme: selectedThemeLabel,
+                state: activeSession.exited ? t("terminal.sessionExited") : connectionStateLabel,
+              })
+              : t("terminal.summarySelectedMeta")
+          }}
         </div>
-        <div class="header-actions">
-          <NSelect
-            :value="selectedTheme"
-            :options="themeOptions"
-            size="small"
-            :consistent-menu-width="false"
-            class="theme-select"
-            @update:value="applyTheme"
+      </article>
+    </section>
+
+    <section class="terminal-view__content">
+      <div ref="terminalShellRef" class="terminal-shell workbench-panel workbench-panel--soft">
+        <header class="page-header terminal-shell__header">
+          <div class="terminal-shell__title-group">
+            <h2 class="header-title">{{ t("terminal.title") }}</h2>
+            <p class="terminal-shell__subtitle">{{ t("terminal.panelSubtitle") }}</p>
+          </div>
+        </header>
+
+        <div class="terminal-panel">
+          <div
+            class="session-backdrop"
+            :class="{ active: showSessions }"
+            @click="showSessions = false"
           />
-          <NButton size="small" @click="createSession">
-            <template #icon>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+
+          <aside class="session-list" :class="{ collapsed: !showSessions }">
+            <div class="session-list-header">
+              <span v-if="showSessions" class="session-list-title">{{
+                t("terminal.sessions")
+              }}</span>
+              <div class="session-list-actions">
+                <NTooltip trigger="hover">
+                  <template #trigger>
+                    <NButton quaternary size="tiny" @click="createSession" circle>
+                      <template #icon>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                      </template>
+                    </NButton>
+                  </template>
+                  {{ t("terminal.newTab") }}
+                </NTooltip>
+              </div>
+            </div>
+            <div v-if="showSessions" class="session-items">
+              <div v-if="sessions.length === 0" class="session-empty">
+                {{ t("common.loading") }}
+              </div>
+              <button
+                v-for="s in sessions"
+                :key="s.id"
+                class="session-item"
+                :class="{ active: s.id === activeSessionId, exited: s.exited }"
+                @click="switchSession(s.id)"
               >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </template>
-            {{ t("terminal.newTab") }}
-          </NButton>
+                <div class="session-item-content">
+                  <span class="session-item-title">{{ s.title }}</span>
+                  <span class="session-item-meta">
+                    <span class="session-item-shell">{{ s.shell }}</span>
+                    <span v-if="s.exited" class="session-item-status">{{
+                      t("terminal.sessionExited")
+                    }}</span>
+                    <span v-else class="session-item-time">{{
+                      formatTime(s.createdAt)
+                    }}</span>
+                  </span>
+                </div>
+                <NPopconfirm
+                  v-if="sessions.length > 1"
+                  @positive-click="closeSession(s.id)"
+                >
+                  <template #trigger>
+                    <button class="session-item-delete" @click.stop>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </template>
+                  {{ t("terminal.closeSession") }}
+                </NPopconfirm>
+              </button>
+            </div>
+          </aside>
+
+          <div class="terminal-main">
+            <header class="terminal-header">
+              <div class="header-left">
+                <NButton
+                  quaternary
+                  size="small"
+                  @click="showSessions = !showSessions"
+                  circle
+                >
+                  <template #icon>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <rect x="3" y="3" width="7" height="7" />
+                      <rect x="14" y="3" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" />
+                      <rect x="14" y="14" width="7" height="7" />
+                    </svg>
+                  </template>
+                </NButton>
+                <span v-if="activeSession" class="header-session-title">{{
+                  activeSession.title
+                }}</span>
+              </div>
+              <div class="header-actions">
+                <NSelect
+                  :value="selectedTheme"
+                  :options="themeOptions"
+                  size="small"
+                  :consistent-menu-width="false"
+                  class="theme-select"
+                  @update:value="applyTheme"
+                />
+                <NButton size="small" @click="createSession">
+                  <template #icon>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </template>
+                  {{ t("terminal.newTab") }}
+                </NButton>
+              </div>
+            </header>
+            <div class="terminal-container">
+              <div ref="terminalRef" class="terminal-xterm" :style="{ backgroundColor: terminalBg }" />
+            </div>
+          </div>
         </div>
-      </header>
-      <div class="terminal-container">
-        <div ref="terminalRef" class="terminal-xterm" :style="{ backgroundColor: terminalBg }" />
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <style scoped lang="scss">
 @use "@/styles/variables" as *;
 
+.terminal-view {
+  min-height: calc(100 * var(--vh));
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-view__decision-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  padding: 0 24px 16px;
+}
+
+.terminal-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.terminal-guide--warning {
+  background:
+    linear-gradient(135deg, rgba(178, 75, 66, 0.08), rgba(255, 255, 255, 0.96)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.terminal-guide--accent {
+  background:
+    linear-gradient(135deg, rgba(var(--accent-primary-rgb), 0.09), rgba(255, 255, 255, 0.96)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.terminal-guide__title,
+.terminal-checklist__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  color: $text-primary;
+}
+
+.terminal-guide__body,
+.terminal-checklist__body,
+.terminal-shell__subtitle {
+  color: $text-secondary;
+  line-height: 1.7;
+}
+
+.terminal-guide__points,
+.terminal-checklist__list {
+  display: grid;
+  gap: 10px;
+}
+
+.terminal-guide__point,
+.terminal-checklist__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.terminal-guide__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.terminal-checklist__label,
+.terminal-stat__label {
+  color: $text-secondary;
+}
+
+.terminal-checklist__count,
+.terminal-stat__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.terminal-view__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 24px 16px;
+}
+
+.terminal-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 142px;
+}
+
+.terminal-stat__meta {
+  color: $text-muted;
+  line-height: 1.6;
+}
+
+.terminal-view__content {
+  padding: 0 24px 24px;
+}
+
+.terminal-shell {
+  padding: 0;
+  overflow: hidden;
+}
+
+.terminal-shell__header {
+  padding: 18px 20px;
+}
+
+.terminal-shell__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .terminal-panel {
   display: flex;
-  height: 100%;
+  min-height: 720px;
   position: relative;
 }
 
@@ -980,6 +1291,22 @@ onUnmounted(() => {
 // ─── Mobile ─────────────────────────────────────────────────────
 
 @media (max-width: $breakpoint-mobile) {
+  .terminal-view__decision-grid,
+  .terminal-view__summary-grid,
+  .terminal-view__content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .terminal-shell__header {
+    padding: 16px 12px 12px;
+  }
+
+  .terminal-checklist__count,
+  .terminal-stat__value {
+    font-size: 22px;
+  }
+
   .session-close-btn {
     display: flex;
   }
@@ -1011,6 +1338,13 @@ onUnmounted(() => {
     left: 0;
     right: 0;
     bottom: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .terminal-view__decision-grid,
+  .terminal-view__summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -9,7 +9,7 @@ type InputLikeInstance = {
 
 const { t } = useI18n()
 const emit = defineEmits<{
-    submit: [name: string, inviteCode: string, userName: string, description: string, compression: { triggerTokens: number; maxHistoryTokens: number; tailMessageCount: number }]
+    submit: [name: string, inviteCode: string, userName: string, description: string, compression: { triggerTokens: number; maxHistoryTokens: number; tailMessageCount: number }, workflow: { workflowName?: string; workflowPrompt?: string }]
     cancel: []
 }>()
 
@@ -17,6 +17,8 @@ const roomName = ref('')
 const inviteCode = ref('')
 const userName = ref('')
 const description = ref('')
+const workflowName = ref('')
+const workflowPrompt = ref('')
 const roomInput = ref<InputLikeInstance | null>(null)
 
 const compression = ref({
@@ -39,7 +41,10 @@ function handleCreate() {
     const code = inviteCode.value.trim() || generateCode()
     const user = userName.value.trim()
     if (!name || !user) return
-    emit('submit', name, code, user, description.value.trim(), { ...compression.value })
+    emit('submit', name, code, user, description.value.trim(), { ...compression.value }, {
+        workflowName: workflowName.value.trim(),
+        workflowPrompt: workflowPrompt.value.trim(),
+    })
 }
 
 function focusRoomInput() {
@@ -89,6 +94,27 @@ function focusRoomInput() {
                 </NButton>
             </div>
         </div>
+
+        <NCollapse class="compression-collapse">
+            <NCollapseItem :title="t('groupChat.workflowConfig')" name="workflow">
+                <div class="compression-fields">
+                    <div class="form-group">
+                        <label class="form-label">{{ t('groupChat.workflowName') }}</label>
+                        <NInput v-model:value="workflowName" :placeholder="t('groupChat.workflowNamePlaceholder')" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">{{ t('groupChat.workflowPrompt') }}</label>
+                        <NInput
+                            v-model:value="workflowPrompt"
+                            type="textarea"
+                            :rows="4"
+                            :placeholder="t('groupChat.workflowPromptPlaceholder')"
+                        />
+                        <p class="form-hint">{{ t('groupChat.workflowPromptHint') }}</p>
+                    </div>
+                </div>
+            </NCollapseItem>
+        </NCollapse>
 
         <NCollapse class="compression-collapse">
             <NCollapseItem :title="t('groupChat.compressionSettings')" name="compression">

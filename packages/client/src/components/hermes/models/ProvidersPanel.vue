@@ -2,9 +2,14 @@
 import ProviderCard from './ProviderCard.vue'
 import { useModelsStore } from '@/stores/hermes/models'
 import { useI18n } from 'vue-i18n'
+import type { AvailableModelGroup } from '@/api/hermes/system'
 
 const { t } = useI18n()
 const modelsStore = useModelsStore()
+
+const emit = defineEmits<{
+  edit: [provider: AvailableModelGroup]
+}>()
 </script>
 
 <template>
@@ -21,6 +26,7 @@ const modelsStore = useModelsStore()
       v-for="g in modelsStore.providers"
       :key="g.provider"
       :provider="g"
+      @edit="emit('edit', $event)"
     />
   </div>
 </template>

@@ -2,6 +2,7 @@ import { request } from '../client'
 
 export interface HealthResponse {
   status: string
+  gateway?: string
   version?: string
   webui_version?: string
   webui_latest?: string
@@ -31,9 +32,12 @@ export interface AvailableModelGroup {
   base_url: string
   models: string[]
   api_key: string
+  primary_model?: string
+  context_length?: number | null
   builtin?: boolean
-  /** 可选：模型 ID -> 元数据（preview/disabled）。目前仅 Copilot 提供。 */
-  model_meta?: Record<string, { preview?: boolean; disabled?: boolean }>
+  user_disabled?: boolean
+  /** 可选：模型 ID -> 元数据（preview/disabled）。 */
+  model_meta?: Record<string, { preview?: boolean; disabled?: boolean; user_disabled?: boolean }>
 }
 
 export interface AvailableModelsResponse {
@@ -80,6 +84,20 @@ export async function updateDefaultModel(data: {
   })
 }
 
+export async function updateModelEnabled(provider: string, model: string, enabled: boolean): Promise<void> {
+  await request('/api/hermes/config/model/enabled', {
+    method: 'PUT',
+    body: JSON.stringify({ provider, model, enabled }),
+  })
+}
+
+export async function updateProviderEnabled(provider: string, enabled: boolean): Promise<void> {
+  await request('/api/hermes/config/provider/enabled', {
+    method: 'PUT',
+    body: JSON.stringify({ provider, enabled }),
+  })
+}
+
 export async function addCustomProvider(data: CustomProvider): Promise<void> {
   await request('/api/hermes/config/providers', {
     method: 'POST',
@@ -98,6 +116,7 @@ export async function updateProvider(poolKey: string, data: {
   base_url?: string
   api_key?: string
   model?: string
+  context_length?: number | null
 }): Promise<void> {
   await request(`/api/hermes/config/providers/${encodeURIComponent(poolKey)}`, {
     method: 'PUT',

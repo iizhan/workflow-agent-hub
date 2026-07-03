@@ -20,6 +20,7 @@ import { setChatRunServer } from './routes/hermes/chat-run'
 import { GroupChatServer } from './services/hermes/group-chat'
 import { ChatRunSocket } from './services/hermes/chat-run-socket'
 import { logger } from './services/logger'
+import { getWebUiPath } from './utils/webui-home'
 
 // Injected by esbuild at build time; fallback to reading package.json in dev mode
 declare const __APP_VERSION__: string
@@ -48,9 +49,13 @@ interface ListenResult {
 
 function listen(app: Koa, port: number, host: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    const s = app.listen(port, host)
-    s.once('listening', () => resolve(s))
+    const s = app.listen(port, host, () => resolve(s))
     s.once('error', reject)
+
+    // Some environments can flip `listening` before external handlers attach.
+    if ((s as any).listening) {
+      resolve(s)
+    }
   })
 }
 
@@ -82,14 +87,11 @@ export async function bootstrap() {
   await initLoginLimiter()
   const app = new Koa()
 
-  await initGatewayManager()
-  console.log('[bootstrap] gateway manager initialized')
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  const gatewayInitPromise = initGatewayManager()
+  console.log('[bootstrap] gateway manager scheduled')
   // Initialize all web-ui SQLite tables
   const { initAllStores } = await import('./db/hermes/init')
-  // Wait 1 second before initializing stores to ensure all resources are ready
   initAllStores()
-  await new Promise(resolve => setTimeout(resolve, 1000))
   console.log('[bootstrap] all stores initialized')
 
   // Sync Hermes sessions from all profiles (only if local DB is empty)
@@ -163,7 +165,7 @@ export async function bootstrap() {
   const interfaces = safeNetworkInterfaces()
   const localIp = Object.values(interfaces).flat().find(i => i?.family === 'IPv4' && !i?.internal)?.address || 'localhost'
   console.log(`Server: http://localhost:${config.port} (LAN: http://${localIp}:${config.port})`)
-  console.log(`Log: ~/.hermes-web-ui/logs/server.log`)
+  console.log(`Log: ${getWebUiPath('logs', 'server.log')}`)
   logger.info('Server: http://localhost:%d (LAN: http://%s:%d)', config.port, localIp, config.port)
 
   // Restore group chat agents after server is ready.
@@ -178,6 +180,17 @@ export async function bootstrap() {
 
   bindShutdown(servers, groupChatServer, chatRunServer)
   startVersionCheck()
+
+  gatewayInitPromise
+    .then(() => {
+      const manager = getGatewayManagerInstance()
+      groupChatServer.setGatewayManager(manager)
+      chatRunServer?.setGatewayManager?.(manager)
+      console.log('[bootstrap] gateway manager initialized')
+    })
+    .catch(() => {
+      // initGatewayManager handles logging; keep Web UI available even if gateways fail.
+    })
 }
 
 bootstrap()

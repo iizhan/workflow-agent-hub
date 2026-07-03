@@ -9,6 +9,21 @@ import {
 import { ContextEngine } from '../../packages/server/src/services/hermes/context-engine/compressor'
 import type { StoredMessage, MessageFetcher, GatewayCaller } from '../../packages/server/src/services/hermes/context-engine/types'
 
+const buildMemoryInstructionBlockMock = vi.hoisted(() => vi.fn().mockResolvedValue('## Memory Context\n- 用户偏好：简洁回复'))
+
+vi.mock('../../packages/server/src/services/hermes/memory-store', () => ({
+    buildMemoryInstructionBlock: buildMemoryInstructionBlockMock,
+}))
+
+vi.mock('../../packages/server/src/services/logger', () => ({
+    logger: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+    },
+}))
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 function makeMessage(overrides: Partial<StoredMessage> = {}): StoredMessage {
@@ -163,6 +178,7 @@ describe('ContextEngine.buildContext', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        buildMemoryInstructionBlockMock.mockResolvedValue('## Memory Context\n- 用户偏好：简洁回复')
         mockFetcher = {
             getMessages: vi.fn().mockReturnValue([]),
             getContextSnapshot: vi.fn().mockReturnValue(null),
@@ -198,6 +214,15 @@ describe('ContextEngine.buildContext', () => {
         expect(result.meta.compressed).toBe(false)
         expect(result.conversationHistory).toHaveLength(10)
         expect(result.instructions).toContain('Claude')
+        expect(buildMemoryInstructionBlockMock).toHaveBeenCalledWith(
+            messages[messages.length - 1].content,
+            expect.objectContaining({
+                profileName: undefined,
+                roomId: 'room-1',
+                userId: messages[messages.length - 1].senderId,
+                agentId: 'agent-1',
+            }),
+        )
         // No LLM call for short conversations
         expect(mockSummarize).not.toHaveBeenCalled()
     })
@@ -431,6 +456,16 @@ describe('ContextEngine.buildContext', () => {
         expect(result.instructions).toContain('Code helper')
         expect(result.instructions).toContain('dev')
         expect(result.instructions).toContain('Alice')
+        expect(result.instructions).toContain('## Memory Context')
+        expect(buildMemoryInstructionBlockMock).toHaveBeenCalledWith(
+            messages[0].content,
+            expect.objectContaining({
+                profileName: undefined,
+                roomId: 'room-1',
+                userId: messages[0].senderId,
+                agentId: 'agent-1',
+            }),
+        )
     })
 
     it('invalidates room cache', async () => {

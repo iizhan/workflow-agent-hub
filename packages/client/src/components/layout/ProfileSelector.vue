@@ -4,6 +4,12 @@ import { NSelect, useMessage } from 'naive-ui'
 import { useProfilesStore } from '@/stores/hermes/profiles'
 import { useI18n } from 'vue-i18n'
 
+const props = withDefaults(defineProps<{
+  compact?: boolean
+}>(), {
+  compact: false,
+})
+
 const { t } = useI18n()
 const message = useMessage()
 const profilesStore = useProfilesStore()
@@ -38,8 +44,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="profile-selector">
-    <div class="selector-label">{{ t('sidebar.profiles') }}</div>
+  <div class="profile-selector" :class="{ compact: props.compact }">
+    <div v-if="!props.compact" class="selector-label">{{ t('sidebar.profiles') }}</div>
     <NSelect
       :value="activeName"
       :options="options"
@@ -56,6 +62,12 @@ onMounted(() => {
 .profile-selector {
   padding: 0 12px;
   margin-bottom: 8px;
+
+  &.compact {
+    padding: 0;
+    margin-bottom: 0;
+    min-width: 124px;
+  }
 }
 
 .selector-label {

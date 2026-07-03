@@ -134,12 +134,13 @@ export function createSession(data: {
   model?: string
   title?: string
   workspace?: string
+  userId?: string
 }): HermesSessionRow {
   const now = Math.floor(Date.now() / 1000)
   if (!isSqliteAvailable()) {
     return {
       id: data.id, profile: data.profile || 'default', source: 'api_server',
-      user_id: null, model: data.model || '', title: data.title || null,
+      user_id: data.userId || null, model: data.model || '', title: data.title || null,
       started_at: now, ended_at: null, end_reason: null,
       message_count: 0, tool_call_count: 0,
       input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0,
@@ -149,9 +150,9 @@ export function createSession(data: {
   }
   const db = getDb()!
   db.prepare(
-    `INSERT INTO ${SESSIONS_TABLE} (id, profile, source, model, title, started_at, last_active, workspace)
-     VALUES (?, ?, 'api_server', ?, ?, ?, ?, ?)`,
-  ).run(data.id, data.profile || 'default', data.model || '', data.title || null, now, now, data.workspace || null)
+    `INSERT INTO ${SESSIONS_TABLE} (id, profile, source, user_id, model, title, started_at, last_active, workspace)
+     VALUES (?, ?, 'api_server', ?, ?, ?, ?, ?, ?)`,
+  ).run(data.id, data.profile || 'default', data.userId || null, data.model || '', data.title || null, now, now, data.workspace || null)
   return getSession(data.id)!
 }
 

@@ -4,14 +4,17 @@ import { useI18n } from "vue-i18n";
 import MessageItem from "./MessageItem.vue";
 import { useChatStore } from "@/stores/hermes/chat";
 import type { Session } from "@/stores/hermes/chat";
+import { BRAND_FULL_NAME, BRAND_LOGO_PATH } from "@/constants/branding";
 
 const props = defineProps<{
   session?: Session | null; // Optional: use this session instead of chatStore.activeSession
+  emptyTitle?: string;
+  emptyBody?: string;
 }>();
 
 const chatStore = useChatStore();
-const { t } = useI18n();
 const listRef = ref<HTMLElement>();
+const { t } = useI18n();
 
 // Use provided session or fall back to chatStore's active session
 const activeSession = computed(() => props.session || chatStore.activeSession);
@@ -94,8 +97,9 @@ watch(
 <template>
   <div ref="listRef" class="message-list">
     <div v-if="!activeSession || activeSession.messages.length === 0" class="empty-state">
-      <img src="/logo.png" alt="Hermes" class="empty-logo" />
-      <p>{{ t("chat.emptyState") }}</p>
+      <img :src="BRAND_LOGO_PATH" :alt="BRAND_FULL_NAME" class="empty-logo" />
+      <div class="empty-state__title">{{ props.emptyTitle || t('chat.historyEmptyViewerTitle') }}</div>
+      <p>{{ props.emptyBody || t('chat.historyEmptyViewerBody') }}</p>
     </div>
     <MessageItem
       v-for="msg in displayMessages"
@@ -138,8 +142,17 @@ watch(
     opacity: 0.25;
   }
 
+  .empty-state__title {
+    color: $text-primary;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
   p {
     font-size: 14px;
+    line-height: 1.6;
+    max-width: 460px;
+    text-align: center;
   }
 }
 

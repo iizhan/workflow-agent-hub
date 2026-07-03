@@ -499,14 +499,14 @@ export async function usageStats(ctx: any) {
 /**
  * List folders under workspace base path for folder picker.
  * GET /api/hermes/workspace/folders?path=<relative_path>
- * Base: /opt/data/workspace (overridable via WORKSPACE_BASE env)
+ * Base: WORKSPACE_BASE env, or the current process working directory
  */
 export async function listWorkspaceFolders(ctx: any) {
   const { resolve, join } = await import('path')
   const { readdir } = await import('fs/promises')
   const { existsSync } = await import('fs')
 
-  const WORKSPACE_BASE = process.env.WORKSPACE_BASE || '/opt/data/workspace'
+  const WORKSPACE_BASE = process.env.WORKSPACE_BASE || process.cwd()
   const subPath = (ctx.query.path as string) || ''
 
   // Security: prevent path traversal

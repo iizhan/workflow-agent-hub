@@ -99,8 +99,12 @@ export async function create(ctx: any) {
 
 export async function update(ctx: any) {
   const poolKey = decodeURIComponent(ctx.params.poolKey)
-  const { name, base_url, api_key, model } = ctx.request.body as {
-    name?: string; base_url?: string; api_key?: string; model?: string
+  const { name, base_url, api_key, model, context_length } = ctx.request.body as {
+    name?: string
+    base_url?: string
+    api_key?: string
+    model?: string
+    context_length?: number | null
   }
   try {
     const isCustom = poolKey.startsWith('custom:')
@@ -115,10 +119,42 @@ export async function update(ctx: any) {
       if (!entry) {
         ctx.status = 404; ctx.body = { error: `Custom provider "${poolKey}" not found` }; return
       }
+      const previousName = String(entry.name || '').trim()
+      const previousModel = String(entry.model || '').trim()
+      const nextName = name !== undefined ? String(name).trim() : previousName
+      const nextModel = model !== undefined ? String(model).trim() : previousModel
+      const nextPoolKey = `custom:${nextName.toLowerCase().replace(/ /g, '-')}`
+
       if (name !== undefined) entry.name = name
       if (base_url !== undefined) entry.base_url = base_url
       if (api_key !== undefined) entry.api_key = api_key
       if (model !== undefined) entry.model = model
+
+      if (!entry.models || typeof entry.models !== 'object') {
+        entry.models = {}
+      }
+      if (previousModel && nextModel && previousModel !== nextModel && entry.models[previousModel] && !entry.models[nextModel]) {
+        entry.models[nextModel] = entry.models[previousModel]
+        delete entry.models[previousModel]
+      }
+      if (context_length !== undefined) {
+        if (context_length && context_length > 0) {
+          entry.models[nextModel] = entry.models[nextModel] || {}
+          entry.models[nextModel].context_length = context_length
+        } else if (entry.models[nextModel]) {
+          delete entry.models[nextModel].context_length
+          if (Object.keys(entry.models[nextModel]).length === 0) {
+            delete entry.models[nextModel]
+          }
+        }
+      }
+
+      if (config.model?.provider === poolKey) {
+        config.model.provider = nextPoolKey
+        if (model !== undefined) {
+          config.model.default = nextModel
+        }
+      }
       await writeConfigYaml(config)
     } else {
       const envMapping = PROVIDER_ENV_MAP[poolKey]
@@ -126,6 +162,9 @@ export async function update(ctx: any) {
         ctx.status = 400; ctx.body = { error: `Cannot update credentials for "${poolKey}"` }; return
       }
       if (api_key !== undefined) { await saveEnvValue(envMapping.api_key_env, api_key) }
+      if (base_url !== undefined && envMapping.base_url_env) {
+        await saveEnvValue(envMapping.base_url_env, base_url)
+      }
     }
     try { await hermesCli.restartGateway() } catch (e: any) { logger.error(e, 'Gateway restart failed') }
     ctx.body = { success: true }

@@ -110,6 +110,8 @@ export interface GatewayStatus {
   url: string
   running: boolean
   pid?: number
+  lastError?: string
+  lastErrorAt?: string
 }
 
 interface ManagedGateway {
@@ -118,6 +120,11 @@ interface ManagedGateway {
   host: string
   url: string
   process?: ChildProcess
+}
+
+interface GatewayFailure {
+  message: string
+  at: string
 }
 
 function formatHostForUrl(host: string): string {
@@ -139,6 +146,12 @@ export class GatewayManager {
 
   /** 本次启动过程中已分配的端口集合（防止并发分配到相同端口） */
   private allocatedPorts = new Set<number>()
+
+  /** 最近一次启动失败原因，供前端直接展示 */
+  private lastFailures = new Map<string, GatewayFailure>()
+
+  /** 当前 profile 最近一次分配到的端口，失败时需要释放，避免端口一路漂移 */
+  private allocatedPortByProfile = new Map<string, number>()
 
   /** 当前活跃的 profile（用于代理路由的默认上游） */
   private activeProfile: string
@@ -196,6 +209,164 @@ export class GatewayManager {
     }
   }
 
+  /** 从 gateway.lock 中读取最近记录的 PID（可能是陈旧值，仅作候选） */
+  private readLockPid(name: string): number | null {
+    const lockPath = join(this.profileDir(name), 'gateway.lock')
+    if (!existsSync(lockPath)) return null
+
+    try {
+      const content = readFileSync(lockPath, 'utf-8').trim()
+      const data = JSON.parse(content)
+      return typeof data.pid === 'number' ? data.pid : parseInt(data.pid, 10) || null
+    } catch {
+      return null
+    }
+  }
+
+  /** 按 profile 名称回查正在运行的 gateway 进程（处理没有 gateway.pid 的场景） */
+  private async findPidByProfile(name: string): Promise<number | null> {
+    const patterns = name === 'default'
+      ? [
+          'hermes_cli.main gateway run',
+          '/Users/bing/.local/bin/hermes gateway run',
+          'hermes gateway run',
+        ]
+      : [
+          `hermes_cli.main --profile ${name} gateway run`,
+          `--profile ${name} gateway run`,
+        ]
+
+    for (const pattern of patterns) {
+      try {
+        const { stdout } = await execFileAsync('pgrep', ['-fal', pattern], {
+          timeout: 5000,
+          windowsHide: true,
+        })
+        const lines = stdout.split('\n').map(line => line.trim()).filter(Boolean)
+        for (const line of lines) {
+          const match = line.match(/^(\d+)\s+/)
+          if (!match) continue
+          const pid = parseInt(match[1], 10)
+          if (Number.isFinite(pid) && this.isProcessAlive(pid)) return pid
+        }
+      } catch {
+        // Ignore lookup failures and fall back to other hints.
+      }
+    }
+
+    return null
+  }
+
+  /** 综合 pid 文件、lock 文件、进程扫描，拿到当前仍然存活的 gateway PID */
+  private async resolveGatewayPid(name: string): Promise<number | null> {
+    const directCandidates = [
+      this.readPidFile(name),
+      this.readLockPid(name),
+    ].filter((pid): pid is number => typeof pid === 'number' && Number.isFinite(pid))
+
+    for (const pid of directCandidates) {
+      if (this.isProcessAlive(pid)) return pid
+    }
+
+    return this.findPidByProfile(name)
+  }
+
+  private attachFailure(status: GatewayStatus): GatewayStatus {
+    const failure = this.lastFailures.get(status.profile)
+    if (!failure || status.running) return status
+    return {
+      ...status,
+      lastError: failure.message,
+      lastErrorAt: failure.at,
+    }
+  }
+
+  private clearFailure(name: string): void {
+    this.lastFailures.delete(name)
+  }
+
+  private releaseAllocatedPort(name: string): void {
+    const port = this.allocatedPortByProfile.get(name)
+    if (typeof port === 'number') {
+      this.allocatedPorts.delete(port)
+      this.allocatedPortByProfile.delete(name)
+    }
+  }
+
+  private setFailure(name: string, message: string): GatewayFailure {
+    const failure = {
+      message,
+      at: new Date().toISOString(),
+    }
+    this.lastFailures.set(name, failure)
+    return failure
+  }
+
+  getLastFailure(name: string): GatewayFailure | null {
+    return this.lastFailures.get(name) || null
+  }
+
+  private readRecentLogLines(filePath: string, maxLines = 120): string[] {
+    if (!existsSync(filePath)) return []
+    try {
+      const content = readFileSync(filePath, 'utf-8')
+      const lines = content.split('\n').map(line => line.trim()).filter(Boolean)
+      return lines.slice(-maxLines)
+    } catch {
+      return []
+    }
+  }
+
+  private normalizeFailureLine(line: string): string {
+    return line
+      .replace(/^[A-Z]+\s+[^:]+:\s*/, '')
+      .replace(/^✗\s*/, '')
+      .trim()
+  }
+
+  private extractFailureMessage(lines: string[]): string | null {
+    const patterns = [
+      'already in use',
+      'runtime lock',
+      'pid file race',
+      'failed to connect',
+      'failed to start',
+      'non-retryable startup conflict',
+      'another gateway instance',
+      'timed out',
+      'cannot connect',
+      'poll error',
+      'exiting cleanly',
+      'unexpectedly',
+    ]
+
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const normalized = this.normalizeFailureLine(lines[index])
+      if (!normalized) continue
+      const lower = normalized.toLowerCase()
+      if (patterns.some(pattern => lower.includes(pattern))) {
+        return normalized
+      }
+    }
+
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const normalized = this.normalizeFailureLine(lines[index])
+      if (normalized && normalized.length <= 240) return normalized
+    }
+
+    return null
+  }
+
+  private recordFailure(name: string, fallbackMessage: string): GatewayFailure {
+    const logDir = join(this.profileDir(name), 'logs')
+    const logLines = [
+      ...this.readRecentLogLines(join(logDir, 'gateway.error.log')),
+      ...this.readRecentLogLines(join(logDir, 'gateway.log')),
+    ]
+    const extracted = this.extractFailureMessage(logLines)
+    return this.setFailure(name, extracted || fallbackMessage)
+  }
+
   // ============================
   // 进程 & 端口检测工具
   // ============================
@@ -237,6 +408,27 @@ export class GatewayManager {
       })
       server.listen(port, host)
     })
+  }
+
+  /** 用 lsof 查询指定 PID 实际监听的本地 TCP 端口 */
+  private async detectListeningPort(pid: number): Promise<number | null> {
+    try {
+      const { stdout } = await execFileAsync('lsof', ['-nP', '-a', '-p', String(pid), '-iTCP', '-sTCP:LISTEN'], {
+        timeout: 5000,
+        windowsHide: true,
+      })
+      const lines = stdout.split('\n')
+      for (const line of lines) {
+        const match = line.match(/TCP\s+(?:\[[^\]]+\]|[^:]+):(\d+)\s+\(LISTEN\)/)
+        if (match) {
+          const port = parseInt(match[1], 10)
+          if (Number.isFinite(port)) return port
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
   }
 
   /** 从 base 端口开始递增查找空闲端口（上限 65535） */
@@ -327,6 +519,7 @@ export class GatewayManager {
    *   3. 冲突则从 base+1 递增找空闲端口，写入 config.yaml
    */
   private async resolvePort(name: string): Promise<{ port: number; host: string }> {
+    this.releaseAllocatedPort(name)
     let { port, host } = this.readProfilePort(name)
 
     // 收集已占用端口：正在运行的网关 + 本次启动已分配的端口
@@ -358,6 +551,7 @@ export class GatewayManager {
     }
 
     this.allocatedPorts.add(port)
+    this.allocatedPortByProfile.set(name, port)
     return { port, host }
   }
 
@@ -435,18 +629,42 @@ export class GatewayManager {
    *   ④ 否则 → 标记为未运行（不杀进程，由 startAll 处理）
    */
   async detectStatus(name: string): Promise<GatewayStatus> {
-    const pid = this.readPidFile(name)
+    const pid = await this.resolveGatewayPid(name)
     const { port, host } = this.readProfilePort(name)
     const url = buildHttpUrl(host, port)
 
     if (pid && this.isProcessAlive(pid) && await this.checkHealth(url)) {
+      this.clearFailure(name)
+      this.allocatedPorts.add(port)
+      this.allocatedPortByProfile.set(name, port)
       this.gateways.set(name, { pid, port, host, url })
       return { profile: name, port, host, url, running: true, pid }
     }
 
+    if (pid && this.isProcessAlive(pid)) {
+      const actualPort = await this.detectListeningPort(pid)
+      if (actualPort && actualPort !== port) {
+        const actualUrl = buildHttpUrl(host, actualPort)
+        if (await this.checkHealth(actualUrl)) {
+          this.writeProfilePort(name, actualPort, host)
+          this.clearFailure(name)
+          this.allocatedPorts.add(actualPort)
+          this.allocatedPortByProfile.set(name, actualPort)
+          this.gateways.set(name, { pid, port: actualPort, host, url: actualUrl })
+          logger.warn(
+            'Gateway for profile "%s" was healthy on port %d instead of configured port %d; config updated',
+            name,
+            actualPort,
+            port,
+          )
+          return { profile: name, port: actualPort, host, url: actualUrl, running: true, pid }
+        }
+      }
+    }
+
     // 未运行或端口不匹配
     this.gateways.delete(name)
-    return { profile: name, port, host, url, running: false }
+    return this.attachFailure({ profile: name, port, host, url, running: false })
   }
 
   /** 检测所有 profile 的网关状态 */
@@ -465,6 +683,7 @@ export class GatewayManager {
    * 启动前自动调用 resolvePort() 确保端口可用且配置完整
    */
   async start(name: string): Promise<GatewayStatus> {
+    this.clearFailure(name)
     const { port, host } = await this.resolvePort(name)
     const hermesHome = this.profileDir(name)
     const url = buildHttpUrl(host, port)
@@ -486,7 +705,11 @@ export class GatewayManager {
 
         this.waitForReady(name, pid, port, host, url)
           .then(resolve)
-          .catch(reject)
+          .catch((err) => {
+            this.releaseAllocatedPort(name)
+            this.recordFailure(name, err instanceof Error ? err.message : String(err))
+            reject(err)
+          })
       })
     }
 
@@ -514,7 +737,13 @@ export class GatewayManager {
       }
     }
 
-    return this.waitForReady(name, 0, port, host, url)
+    try {
+      return await this.waitForReady(name, 0, port, host, url)
+    } catch (err) {
+      this.releaseAllocatedPort(name)
+      this.recordFailure(name, err instanceof Error ? err.message : String(err))
+      throw err
+    }
   }
 
   /** 等待网关健康检查通过，最多 15 秒 */
@@ -527,6 +756,7 @@ export class GatewayManager {
       if (await this.checkHealth(url, 2000)) {
         // "gateway start" 自行管理进程，重新从 pid 文件读取实际 PID
         const actualPid = this.readPidFile(name) ?? pid
+        this.clearFailure(name)
         this.gateways.set(name, { pid: actualPid, port, host, url })
         return { profile: name, port, host, url, running: true, pid: actualPid || undefined }
       }
@@ -563,7 +793,7 @@ export class GatewayManager {
       // WSL / Docker：直接杀进程组
       let pid = gw?.pid
       if (!pid) {
-        pid = this.readPidFile(name) ?? undefined
+        pid = await this.resolveGatewayPid(name) ?? undefined
       }
       if (pid) {
         try { process.kill(-pid, 'SIGTERM') } catch {
@@ -577,6 +807,7 @@ export class GatewayManager {
     while (Date.now() < deadline) {
       if (!(await this.checkHealth(url, 1000))) {
         this.gateways.delete(name)
+        this.releaseAllocatedPort(name)
         logger.info('Stopped gateway for profile "%s"', name)
         return
       }
@@ -584,6 +815,7 @@ export class GatewayManager {
     }
     // 超时也清理
     this.gateways.delete(name)
+    this.releaseAllocatedPort(name)
     logger.warn('Stopped gateway for profile "%s" (timeout)', name)
   }
 
@@ -632,7 +864,7 @@ export class GatewayManager {
       }
 
       // 有 PID 文件但进程未在正确端口运行 → 旧进程，先停掉
-      const pid = this.readPidFile(name)
+      const pid = await this.resolveGatewayPid(name)
       if (pid && this.isProcessAlive(pid)) {
         logger.info('%s: stale process (PID: %d), stopping', name, pid)
         try { await this.stop(name) } catch { }

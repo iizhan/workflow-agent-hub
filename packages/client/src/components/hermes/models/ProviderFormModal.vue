@@ -3,12 +3,21 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NInputNumber, NButton, NSelect, NRadioGroup, NRadioButton, useMessage, useDialog } from 'naive-ui'
 import { useModelsStore } from '@/stores/hermes/models'
 import { useI18n } from 'vue-i18n'
+import type { AvailableModelGroup } from '@/api/hermes/system'
 import CodexLoginModal from './CodexLoginModal.vue'
 import NousLoginModal from './NousLoginModal.vue'
 import CopilotLoginModal from './CopilotLoginModal.vue'
 import { checkCopilotToken, enableCopilot, type CopilotTokenSource } from '@/api/hermes/copilot-auth'
 
 const { t } = useI18n()
+
+const props = withDefaults(defineProps<{
+  mode?: 'create' | 'edit'
+  provider?: AvailableModelGroup | null
+}>(), {
+  mode: 'create',
+  provider: null,
+})
 
 const emit = defineEmits<{
   close: []
@@ -55,6 +64,9 @@ const isCopilot = computed(() => selectedPreset.value === COPILOT_KEY)
 const isCliproxyApi = computed(() => selectedPreset.value === CLIPROXYAPI_KEY)
 const isAlibabaCoding = computed(() => selectedPreset.value === ALIBABA_CODING_KEY)
 const alibabaCodingRegion = ref<'intl' | 'cn'>('intl')
+const isEditMode = computed(() => props.mode === 'edit' && !!props.provider)
+const modalTitle = computed(() => (isEditMode.value ? t('models.editProvider') : t('models.addProvider')))
+const submitLabel = computed(() => (isEditMode.value ? t('common.save') : t('common.add')))
 
 const presetOptions = computed(() =>
   modelsStore.allProviders.map(g => ({ label: g.label, value: g.provider })),
@@ -66,6 +78,34 @@ const FUN_LINK_MAP: Record<string, string> = {
 }
 
 const funProviderLink = computed(() => selectedPreset.value ? FUN_LINK_MAP[selectedPreset.value] || '' : '')
+
+function resetForm() {
+  modelOptions.value = []
+  selectedPreset.value = null
+  alibabaCodingRegion.value = 'intl'
+  formData.value = {
+    name: '',
+    base_url: '',
+    api_key: '',
+    model: '',
+    context_length: null,
+  }
+}
+
+function populateFormFromProvider(provider: AvailableModelGroup | null) {
+  resetForm()
+  if (!provider) return
+  providerType.value = provider.provider.startsWith('custom:') ? 'custom' : 'preset'
+  selectedPreset.value = providerType.value === 'preset' ? provider.provider : null
+  modelOptions.value = Array.from(new Set(provider.models || [])).map((m: string) => ({ label: m, value: m }))
+  formData.value = {
+    name: provider.label || '',
+    base_url: provider.base_url || '',
+    api_key: provider.api_key || '',
+    model: provider.primary_model || provider.models?.[0] || '',
+    context_length: provider.context_length ?? null,
+  }
+}
 
 function autoGenerateName(url: string): string {
   const clean = url.replace(/^https?:\/\//, '').replace(/\/v1\/?$/, '')
@@ -109,16 +149,23 @@ watch(() => formData.value.base_url, (url) => {
 })
 
 watch(providerType, () => {
-  modelOptions.value = []
-  formData.value = { name: '', base_url: '', api_key: '', model: '', context_length: null }
-  selectedPreset.value = null
+  if (isEditMode.value) return
+  resetForm()
 })
 
 onMounted(() => {
   if (modelsStore.providers.length === 0) {
     modelsStore.fetchProviders()
   }
+  if (isEditMode.value) {
+    populateFormFromProvider(props.provider)
+  }
 })
+
+watch(() => props.provider, (provider) => {
+  if (!isEditMode.value) return
+  populateFormFromProvider(provider)
+}, { immediate: true })
 
 async function fetchModels() {
   const { base_url } = formData.value
@@ -153,6 +200,39 @@ async function fetchModels() {
 }
 
 async function handleSave() {
+  if (isEditMode.value && props.provider) {
+    if (providerType.value === 'custom' && !formData.value.name.trim()) {
+      message.warning(t('models.nameRequired'))
+      return
+    }
+    if (!formData.value.base_url.trim()) {
+      message.warning(t('models.baseUrlRequired'))
+      return
+    }
+    if (!formData.value.model.trim()) {
+      message.warning(t('models.modelRequired'))
+      return
+    }
+
+    loading.value = true
+    try {
+      await modelsStore.updateProvider(props.provider.provider, {
+        name: providerType.value === 'custom' ? formData.value.name.trim() : undefined,
+        base_url: formData.value.base_url.trim(),
+        api_key: formData.value.api_key.trim(),
+        model: formData.value.model.trim(),
+        context_length: providerType.value === 'custom' ? formData.value.context_length : undefined,
+      })
+      message.success(t('models.providerUpdated'))
+      emit('saved')
+    } catch (e: any) {
+      message.error(e.message)
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
   if (providerType.value === 'preset' && !selectedPreset.value) {
     message.warning(t('models.selectProviderRequired'))
     return
@@ -297,7 +377,7 @@ function handleClose() {
   <NModal
     v-model:show="showModal"
     preset="card"
-    :title="t('models.addProvider')"
+    :title="modalTitle"
     :style="{ width: 'min(520px, calc(100vw - 32px))' }"
     :mask-closable="!loading && !showCodexLogin && !showNousLogin && !showCopilotLogin"
     @after-leave="emit('close')"
@@ -308,6 +388,7 @@ function handleClose() {
           <NButton
             :type="providerType === 'preset' ? 'primary' : 'default'"
             size="small"
+            :disabled="isEditMode"
             @click="providerType = 'preset'"
           >
             {{ t('models.preset') }}
@@ -315,6 +396,7 @@ function handleClose() {
           <NButton
             :type="providerType === 'custom' ? 'primary' : 'default'"
             size="small"
+            :disabled="isEditMode"
             @click="providerType = 'custom'"
           >
             {{ t('models.custom') }}
@@ -322,7 +404,7 @@ function handleClose() {
         </div>
       </NFormItem>
 
-      <NFormItem v-if="providerType === 'preset'" :label="t('models.selectProvider')" required>
+      <NFormItem v-if="providerType === 'preset' && !isEditMode" :label="t('models.selectProvider')" required>
         <NSelect
           v-model:value="selectedPreset"
           :options="presetOptions"
@@ -337,7 +419,7 @@ function handleClose() {
         </div>
       </NFormItem>
 
-      <NFormItem v-if="providerType === 'custom'" :label="t('models.name')">
+      <NFormItem v-if="providerType === 'custom'" :label="t('models.name')" :required="isEditMode">
         <NInput
           v-model:value="formData.name"
           :placeholder="t('models.autoGeneratedName')"
@@ -355,7 +437,7 @@ function handleClose() {
         <NInput
           v-model:value="formData.base_url"
           :placeholder="t('models.baseUrlPlaceholder')"
-          :disabled="providerType === 'preset'"
+          :disabled="providerType === 'preset' && !isEditMode"
         />
       </NFormItem>
 
@@ -404,7 +486,7 @@ function handleClose() {
       <div class="modal-footer">
         <NButton @click="handleClose">{{ t('common.cancel') }}</NButton>
         <NButton type="primary" :loading="loading" @click="handleSave">
-          {{ t('common.add') }}
+          {{ submitLabel }}
         </NButton>
       </div>
     </template>

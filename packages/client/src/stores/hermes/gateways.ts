@@ -5,12 +5,17 @@ import { fetchGateways, startGateway, stopGateway, type GatewayStatus } from '@/
 export const useGatewayStore = defineStore('gateways', () => {
   const gateways = ref<GatewayStatus[]>([])
   const loading = ref(false)
+  const hasFetched = ref(false)
 
   async function fetchStatus() {
     loading.value = true
     try {
       const data = await fetchGateways()
       gateways.value = Array.isArray(data) ? data : Object.values(data || {})
+      hasFetched.value = true
+    } catch (err) {
+      hasFetched.value = true
+      throw err
     } finally {
       loading.value = false
     }
@@ -27,6 +32,10 @@ export const useGatewayStore = defineStore('gateways', () => {
       } else {
         gateways.value.push(status)
       }
+      return status
+    } catch (err) {
+      await fetchStatus()
+      throw err
     } finally {
       loading.value = false
     }
@@ -41,11 +50,16 @@ export const useGatewayStore = defineStore('gateways', () => {
       if (gw) {
         gw.running = false
         gw.pid = undefined
+        gw.lastError = undefined
+        gw.lastErrorAt = undefined
       }
+    } catch (err) {
+      await fetchStatus()
+      throw err
     } finally {
       loading.value = false
     }
   }
 
-  return { gateways, loading, fetchStatus, start, stop }
+  return { gateways, loading, hasFetched, fetchStatus, start, stop }
 })

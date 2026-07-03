@@ -6,6 +6,8 @@ export const modelRoutes = new Router()
 modelRoutes.get('/api/hermes/available-models', ctrl.getAvailable)
 modelRoutes.get('/api/hermes/config/models', ctrl.getConfigModels)
 modelRoutes.put('/api/hermes/config/model', ctrl.setConfigModel)
+modelRoutes.put('/api/hermes/config/model/enabled', ctrl.setModelEnabled)
+modelRoutes.put('/api/hermes/config/provider/enabled', ctrl.setProviderEnabled)
 
 // Model context routes
 modelRoutes.get('/api/hermes/model-context', ctrl.getModelContext)

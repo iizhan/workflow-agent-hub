@@ -4,6 +4,12 @@ import { NModal, NInput, NSelect } from 'naive-ui'
 import { useAppStore } from '@/stores/hermes/app'
 import { useI18n } from 'vue-i18n'
 
+const props = withDefaults(defineProps<{
+  compact?: boolean
+}>(), {
+  compact: false,
+})
+
 const { t } = useI18n()
 const appStore = useAppStore()
 
@@ -16,17 +22,21 @@ const customProvider = ref('')
 const providerOptions = computed(() => {
   const current = appStore.selectedProvider
   customProvider.value = current
-  return appStore.modelGroups.map(g => ({ label: g.label, value: g.provider }))
+  return appStore.modelGroups
+    .filter(g => !g.user_disabled)
+    .map(g => ({ label: g.label, value: g.provider }))
 })
 
 const modelGroupsWithCustom = computed(() =>
-  appStore.modelGroups.map(g => ({
-    ...g,
-    models: [
-      ...g.models,
-      ...(appStore.customModels[g.provider] || []).filter(m => !g.models.includes(m)),
-    ],
-  }))
+  appStore.modelGroups
+    .filter(g => !g.user_disabled)
+    .map(g => ({
+      ...g,
+      models: [
+        ...g.models,
+        ...(appStore.customModels[g.provider] || []).filter(m => !g.models.includes(m)),
+      ],
+    }))
 )
 
 const customModelSet = computed(() => {
@@ -58,6 +68,8 @@ function isGroupCollapsed(provider: string) {
 
 function handleSelect(model: string, provider: string) {
   const meta = appStore.modelGroups.find(g => g.provider === provider)?.model_meta?.[model]
+  const group = appStore.modelGroups.find(g => g.provider === provider)
+  if (group?.user_disabled) return
   if (meta?.disabled) return
   appStore.switchModel(model, provider)
   showModal.value = false
@@ -69,6 +81,8 @@ function handleCustomSubmit() {
   if (!model || !customProvider.value) return
   // 拦截 disabled 模型，避免 custom input 绕过列表里的灰显限制
   const meta = appStore.modelGroups.find(g => g.provider === customProvider.value)?.model_meta?.[model]
+  const group = appStore.modelGroups.find(g => g.provider === customProvider.value)
+  if (group?.user_disabled) return
   if (meta?.disabled) return
   appStore.switchModel(model, customProvider.value)
   showModal.value = false
@@ -86,8 +100,8 @@ function openModal() {
 </script>
 
 <template>
-  <div class="model-selector">
-    <div class="model-label">{{ t('models.title') }}</div>
+  <div class="model-selector" :class="{ compact: props.compact }">
+    <div v-if="!props.compact" class="model-label">{{ t('models.title') }}</div>
     <button class="model-trigger" @click="openModal">
       <span class="model-name" :title="appStore.selectedModel">{{ appStore.selectedModel || '—' }}</span>
       <svg class="model-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -178,6 +192,12 @@ function openModal() {
 .model-selector {
   padding: 0 12px;
   margin-bottom: 8px;
+
+  &.compact {
+    padding: 0;
+    margin-bottom: 0;
+    min-width: 168px;
+  }
 }
 
 .model-label {

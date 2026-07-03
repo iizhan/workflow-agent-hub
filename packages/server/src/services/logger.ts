@@ -1,15 +1,14 @@
 import pino from 'pino'
-import { resolve } from 'path'
 import { mkdirSync, statSync, truncateSync, openSync, readSync, closeSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
+import { getWebUiPath } from '../utils/webui-home'
 
 const MAX_LOG_SIZE = 3 * 1024 * 1024 // 3MB
 const CHECK_INTERVAL = 60_000 // Check every minute
 
-const logDir = resolve(homedir(), '.hermes-web-ui', 'logs')
+const logDir = getWebUiPath('logs')
 mkdirSync(logDir, { recursive: true })
 
-const logFile = resolve(logDir, 'server.log')
+const logFile = getWebUiPath('logs', 'server.log')
 
 function rotateIfNeeded() {
   try {

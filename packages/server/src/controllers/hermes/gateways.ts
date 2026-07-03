@@ -13,7 +13,14 @@ export async function start(ctx: any) {
   try {
     const status = await mgr.start(ctx.params.name)
     ctx.body = { success: true, gateway: status }
-  } catch (err: any) { ctx.status = 500; ctx.body = { error: err.message } }
+  } catch (err: any) {
+    const failure = mgr.getLastFailure?.(ctx.params.name)
+    ctx.status = 500
+    ctx.body = {
+      error: failure?.message || err.message,
+      gateway: await mgr.detectStatus(ctx.params.name),
+    }
+  }
 }
 
 export async function stop(ctx: any) {

@@ -40,6 +40,44 @@ export interface MemoryData {
   soul_mtime: number | null
 }
 
+export interface MemoryPolicyConfig {
+  fact_ttl_days: number
+  preference_ttl_days: number
+  episodic_ttl_days: number
+  procedure_ttl_days: number
+  relationship_ttl_days: number
+  policy_ttl_days: number
+  search_limit: number
+  allow_fuzzy_recall: boolean
+  allow_multi_hop: boolean
+}
+
+export interface MemoryEntrySummary {
+  id: string
+  profile: string
+  section: string
+  scope_type: string
+  scope_id: string
+  user_id: string
+  room_id: string
+  agent_id: string
+  memory_type: string
+  title: string
+  content: string
+  tags: string[]
+  status: string
+  confidence: number
+  priority: number
+  salience: number
+  source_type: string
+  source_ref: string
+  created_at: number
+  updated_at: number
+  last_accessed_at: number | null
+  expires_at: number | null
+  archived_at: number | null
+}
+
 export interface SkillsData {
   categories: SkillCategory[]
   archived: SkillInfo[]
@@ -62,6 +100,30 @@ export async function fetchSkillFiles(category: string, skill: string): Promise<
 
 export async function fetchMemory(): Promise<MemoryData> {
   return request<MemoryData>('/api/hermes/memory')
+}
+
+export async function fetchMemoryPolicy(): Promise<MemoryPolicyConfig> {
+  return request<MemoryPolicyConfig>('/api/hermes/memory/policy')
+}
+
+export async function fetchMemoryEntries(params: {
+  section?: 'memory' | 'user' | 'soul'
+  scopeType?: string
+  memoryType?: string
+  status?: string
+  q?: string
+  limit?: number
+} = {}): Promise<MemoryEntrySummary[]> {
+  const query = new URLSearchParams()
+  if (params.section) query.set('section', params.section)
+  if (params.scopeType) query.set('scopeType', params.scopeType)
+  if (params.memoryType) query.set('memoryType', params.memoryType)
+  if (params.status) query.set('status', params.status)
+  if (params.q) query.set('q', params.q)
+  if (params.limit != null) query.set('limit', String(params.limit))
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  const res = await request<{ entries: MemoryEntrySummary[] }>(`/api/hermes/memory/entries${suffix}`)
+  return res.entries
 }
 
 export async function saveMemory(section: 'memory' | 'user' | 'soul', content: string): Promise<void> {

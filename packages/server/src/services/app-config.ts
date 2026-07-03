@@ -1,9 +1,8 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { homedir } from 'os'
+import { getWebUiPath } from '../utils/webui-home'
 
-const APP_HOME = join(homedir(), '.hermes-web-ui')
-const APP_CONFIG_FILE = join(APP_HOME, 'config.json')
+const APP_HOME = getWebUiPath()
+const APP_CONFIG_FILE = getWebUiPath('config.json')
 
 export interface AppConfig {
   // Whether GitHub Copilot has been explicitly added by the user in web-ui.

@@ -7,6 +7,8 @@ export interface GatewayStatus {
   url: string
   running: boolean
   pid?: number
+  lastError?: string
+  lastErrorAt?: string
 }
 
 export async function fetchGateways(): Promise<GatewayStatus[]> {
